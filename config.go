@@ -15,7 +15,10 @@ import (
 	"github.com/gopasspw/gopass/pkg/debug"
 )
 
-var keyValueTpl = "\t%s = %s%s"
+var (
+	keyValueTpl = "\t%s = %s%s"
+	keyTpl      = "\t%s%s"
+)
 
 // Config is a single parsed config file. It contains a reference of the input file, if any.
 // It can only be populated only by reading the environment variables.
@@ -142,7 +145,7 @@ func (c *Config) Set(key, value string) error {
 		}
 		updated = true
 
-		return fmt.Sprintf(keyValueTpl, sKey, value, comment), false
+		return formatKeyValue(sKey, value, comment), false
 	})
 }
 
@@ -187,7 +190,7 @@ func (c *Config) insertValue(key, value string) error {
 			continue
 		}
 
-		lines = append(lines, fmt.Sprintf(keyValueTpl, wKey, value, ""))
+		lines = append(lines, formatKeyValue(wKey, value, ""))
 		written = true
 	}
 
@@ -198,7 +201,7 @@ func (c *Config) insertValue(key, value string) error {
 			sect = fmt.Sprintf("[%s \"%s\"]", wSection, wSubsection)
 		}
 		lines = append(lines, sect)
-		lines = append(lines, fmt.Sprintf(keyValueTpl, wKey, value, ""))
+		lines = append(lines, formatKeyValue(wKey, value, ""))
 	}
 
 	c.raw = strings.Builder{}
@@ -208,6 +211,14 @@ func (c *Config) insertValue(key, value string) error {
 	debug.V(3).Log("output: \n--------------\n%s\n--------------\n", strings.Join(strings.Split("+ "+c.raw.String(), "\n"), "\n+ "))
 
 	return c.flushRaw()
+}
+
+func formatKeyValue(key, value, comment string) string {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Sprintf(keyTpl, key, comment)
+	}
+
+	return fmt.Sprintf(keyValueTpl, key, value, comment)
 }
 
 func parseSectionHeader(line string) (section, subsection string, skip bool) { //nolint:nonamedreturns
@@ -312,12 +323,13 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 			continue
 		}
 
-		// TODO(gitconfig) This will skip over valid entries like this one:
-		// [core]
-		//  sslVerify
-		// These are odd but we should still support them.
-		// Check https://git-scm.com/docs/git-config#_syntax for more details.
+		// Reference: https://git-scm.com/docs/git-config#_syntax.
 		k, v, found := strings.Cut(line, "=")
+		// This is a special case for bare booleans.
+		if !found && !strings.HasPrefix(line, "[") && strings.TrimSpace(line) != "" {
+			v = ""
+			found = true
+		}
 		if !found {
 			debug.V(3).Log("no valid KV-pair on line: %q", line)
 
@@ -594,7 +606,7 @@ func ParseConfig(r io.Reader) *Config {
 	lines := parseConfig(r, "", "", func(fk, k, v, comment, _ string) (string, bool) {
 		c.vars[fk] = append(c.vars[fk], v)
 
-		return fmt.Sprintf(keyValueTpl, k, v, comment), false
+		return formatKeyValue(k, v, comment), false
 	})
 
 	c.raw.WriteString(strings.Join(lines, "\n"))
