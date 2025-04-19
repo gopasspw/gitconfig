@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -108,12 +109,10 @@ func (c *Config) Set(key, value string) error {
 
 	// already present at the same value, no need to rewrite the config
 	if vs, found := c.vars[key]; found {
-		for _, v := range vs {
-			if v == value {
-				debug.V(1).Log("key %q with value %q already present. Not re-writing.", key, value)
+		if slices.Contains(vs, value) {
+			debug.V(1).Log("key %q with value %q already present. Not re-writing.", key, value)
 
-				return nil
-			}
+			return nil
 		}
 	}
 
