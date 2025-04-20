@@ -34,7 +34,7 @@ var configSampleDocs = `#
 
 ; HTTP
 [http]
-    sslVerify
+	sslVerify
 
 [http "https://weak.example.com"]
 	sslVerify = false
@@ -419,7 +419,7 @@ func TestUnset(t *testing.T) {
 
 ; HTTP
 [http]
-    sslVerify
+	sslVerify
 
 [http "https://weak.example.com"]
 	sslVerify = false
