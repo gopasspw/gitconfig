@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,8 +17,9 @@ import (
 )
 
 var (
-	keyValueTpl = "\t%s = %s%s"
-	keyTpl      = "\t%s%s"
+	keyValueTpl     = "\t%s = %s%s"
+	keyTpl          = "\t%s%s"
+	reQuotedComment = regexp.MustCompile(`"[^"]*[#;][^"]*"`)
 )
 
 // Config is a single parsed config file. It contains a reference of the input file, if any.
@@ -348,15 +350,8 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 			wKey = k
 		}
 
-		oValue := v
-		comment := ""
-
-		// Handle inline comments
-		if strings.ContainsAny(oValue, "#;") {
-			comment = " " + oValue[strings.IndexAny(oValue, "#;"):]
-			oValue = oValue[:strings.IndexAny(oValue, "#;")]
-			oValue = strings.TrimSpace(oValue)
-		}
+		// extract possilbe comment from the value
+		oValue, comment := splitValueComment(v)
 
 		if key != "" && (key != fKey) {
 			continue
@@ -376,6 +371,25 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	}
 
 	return lines
+}
+
+func splitValueComment(rValue string) (string, string) {
+	// Trivial case: no comment. Return early, do not alter anything.
+	if !strings.ContainsAny(rValue, "#;") {
+		return rValue, ""
+	}
+
+	// Medium case: comment present, but not quoted.
+	if !reQuotedComment.MatchString(rValue) {
+		comment := " " + rValue[strings.IndexAny(rValue, "#;"):]
+		rValue = rValue[:strings.IndexAny(rValue, "#;")]
+		rValue = strings.TrimSpace(rValue)
+
+		return rValue, comment
+	}
+
+	// Hard case: comment present and quoted.
+	return parseLineForComment(rValue)
 }
 
 // NewFromMap allows creating a new preset config from a map.

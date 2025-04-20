@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/gopasspw/gopass/pkg/appdir"
@@ -410,4 +411,26 @@ func (cs *Configs) ListSubsections(wantSection string) []string {
 	}), func(s string) bool {
 		return s != ""
 	})
+}
+
+// KVList returns a list of all keys and values matching the given prefix.
+func (cs *Configs) KVList(prefix, sep string) []string {
+	if sep == "" {
+		sep = "="
+	}
+	keys := cs.List(prefix)
+	kv := make([]string, 0, len(keys))
+	for _, k := range keys {
+		vs := cs.GetAll(k)
+		for _, v := range vs {
+			if v == "" {
+				continue
+			}
+			kv = append(kv, fmt.Sprintf("%s%s%s", k, sep, v))
+		}
+	}
+
+	sort.Strings(kv)
+
+	return kv
 }
