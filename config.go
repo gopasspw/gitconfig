@@ -400,8 +400,9 @@ func splitValueComment(rValue string) (string, string) {
 // It finds the first unquoted comment character (# or ;) to split the line.
 // It trims whitespace from the content part and removes matching surrounding
 // single (”) or double ("") quotes from it.
-// Uses break instead of goto.
-func parseLineForComment(line string) (content, comment string) {
+// The returned comment string does NOT include the delimiter character itself
+// and is also trimmed of leading/trailing whitespace.
+func parseLineForComment(line string) (content string, comment string) {
 	commentStartIndex := -1 // Initialize to -1, indicating comment not found yet
 	inSingleQuotes := false
 	inDoubleQuotes := false
@@ -411,39 +412,39 @@ func parseLineForComment(line string) (content, comment string) {
 	for i, r := range line {
 		switch r {
 		case '\'':
-			// Toggle single quote state only if not inside double quotes
 			if !inDoubleQuotes {
 				inSingleQuotes = !inSingleQuotes
 			}
 		case '"':
-			// Toggle double quote state only if not inside single quotes
 			if !inSingleQuotes {
 				inDoubleQuotes = !inDoubleQuotes
 			}
 		case '#', ';':
-			// Check for comment character only if not inside any quotes
 			if !inSingleQuotes && !inDoubleQuotes {
-				commentStartIndex = i // Record the index
-				foundComment = true   // Set flag to break loop
+				commentStartIndex = i
+				foundComment = true
 			}
 		}
-		// Exit the loop immediately after finding the comment
 		if foundComment {
 			break // Exit the for loop
 		}
 	}
-	// No EndLoop label needed anymore
 
 	// Determine initial content and comment parts based on index
 	var initialContent string
 	if commentStartIndex != -1 {
 		// Comment character was found
 		initialContent = line[:commentStartIndex]
-		comment = line[commentStartIndex:] // Includes the comment char itself and everything after
+		// Extract comment text *after* the delimiter and trim whitespace
+		if commentStartIndex+1 <= len(line) { // Check index bounds
+			comment = strings.TrimSpace(line[commentStartIndex+1:])
+		} else {
+			comment = "" // Delimiter was the very last character
+		}
 	} else {
-		// No unquoted comment character found in the entire line
-		initialContent = line // The whole line is potential content
-		comment = ""          // No comment part
+		// No unquoted comment character found
+		initialContent = line
+		comment = ""
 	}
 
 	// Trim whitespace from the initial content part FIRST
@@ -454,20 +455,16 @@ func parseLineForComment(line string) (content, comment string) {
 	if n >= 2 {
 		firstChar := trimmedContent[0]
 		lastChar := trimmedContent[n-1]
-		// Check if the first and last characters are matching quotes
 		if (firstChar == '\'' && lastChar == '\'') || (firstChar == '"' && lastChar == '"') {
-			// Assign the inner slice (removing the quotes) to content
-			content = trimmedContent[1 : n-1]
+			content = trimmedContent[1 : n-1] // Remove surrounding quotes
 		} else {
-			// No matching surrounding quotes, use the trimmed content as is
-			content = trimmedContent
+			content = trimmedContent // No surrounding quotes
 		}
 	} else {
-		// String is too short to have surrounding quotes, use the trimmed content
-		content = trimmedContent
+		content = trimmedContent // Too short for surrounding quotes
 	}
 
-	// Return the processed content and the raw comment part
+	// Return the processed content and the processed comment part
 	return content, comment
 }
 
