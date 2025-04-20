@@ -20,6 +20,8 @@ var (
 	keyValueTpl     = "\t%s = %s%s"
 	keyTpl          = "\t%s%s"
 	reQuotedComment = regexp.MustCompile(`"[^"]*[#;][^"]*"`)
+	// "The variable names are case-insensitive, allow only alphanumeric characters and -, and must start with an alphabetic character.""
+	reValidKey = regexp.MustCompile(`^[a-z]+[a-z0-9-]*$`)
 )
 
 // Config is a single parsed config file. It contains a reference of the input file, if any.
@@ -338,8 +340,19 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 			continue
 		}
 		// Remove whitespace from key and value that might be around the '='
-		k = strings.TrimRight(k, " ")
-		v = strings.TrimLeft(v, " ")
+		// "Whitespace characters surrounding name, = and value are discarded."
+		// https://git-scm.com/docs/git-config#_syntax
+		k = strings.TrimSpace(k)
+		v = strings.TrimSpace(v)
+
+		// "The variable names are case-insensitive"
+		k = strings.ToLower(k)
+
+		if !reValidKey.MatchString(k) {
+			debug.V(3).Log("invalid key %q in line: %q", k, line)
+
+			continue
+		}
 
 		fKey := section + "."
 		if subsection != "" {
@@ -352,6 +365,9 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 
 		// extract possilbe comment from the value
 		oValue, comment := splitValueComment(v)
+
+		// unescape value
+		oValue = unescapeValue(oValue)
 
 		if key != "" && (key != fKey) {
 			continue
@@ -376,6 +392,8 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 func splitValueComment(rValue string) (string, string) {
 	// Trivial case: no comment. Return early, do not alter anything.
 	if !strings.ContainsAny(rValue, "#;") {
+		// "If value needs to contain leading or trailing whitespace characters, it must be enclosed in double quotation marks (")."
+		rValue = strings.Trim(rValue, "\"")
 		return rValue, ""
 	}
 
@@ -384,12 +402,29 @@ func splitValueComment(rValue string) (string, string) {
 		comment := " " + rValue[strings.IndexAny(rValue, "#;"):]
 		rValue = rValue[:strings.IndexAny(rValue, "#;")]
 		rValue = strings.TrimSpace(rValue)
+		rValue = strings.Trim(rValue, "\"")
 
 		return rValue, comment
 	}
 
 	// Hard case: comment present and quoted.
 	return parseLineForComment(rValue)
+}
+
+func unescapeValue(value string) string {
+	// The following escape sequences (beside \" and \\) are recognized:
+	// \n for newline character (NL),
+	// \t for horizontal tabulation (HT, TAB) and
+	// \b for backspace (BS).
+	// Other char escape sequences (including octal escape sequences) are invalid.
+
+	value = strings.ReplaceAll(value, `\\`, `\`)
+	value = strings.ReplaceAll(value, `\"`, `"`)
+	value = strings.ReplaceAll(value, `\n`, "\n")
+	value = strings.ReplaceAll(value, `\t`, "\t")
+	value = strings.ReplaceAll(value, `\b`, "\b")
+
+	return value
 }
 
 // NewFromMap allows creating a new preset config from a map.

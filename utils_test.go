@@ -235,3 +235,83 @@ func TestParseLineForComment(t *testing.T) {
 		})
 	}
 }
+
+func TestCanonicalizeKey(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Simple key",
+			input:    "core.autocrlf",
+			expected: "core.autocrlf",
+		},
+		{
+			name:     "Key with subsection",
+			input:    "remote.origin.url",
+			expected: "remote.origin.url",
+		},
+		{
+			name:     "Key with mixed case section and key",
+			input:    "Core.AutoCRLF",
+			expected: "core.autocrlf",
+		},
+		{
+			name:     "Key with mixed case section, subsection, and key",
+			input:    "Remote.Origin.URL",
+			expected: "remote.Origin.url",
+		},
+		{
+			name:     "Key with subsection containing dots",
+			input:    "url.git@github.com:.pushinsteadof",
+			expected: "url.git@github.com:.pushinsteadof",
+		},
+		{
+			name:     "Key with mixed case and subsection containing dots",
+			input:    "Url.Git@github.com:.PushInsteadOf",
+			expected: "url.Git@github.com:.pushinsteadof",
+		},
+		{
+			name:     "Empty input - invalid",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Single part input - invalid",
+			input:    "section",
+			expected: "",
+		},
+		{
+			name:     "Key starting with dot - invalid",
+			input:    ".key",
+			expected: "",
+		},
+		{
+			name:     "Key ending with dot - invalid",
+			input:    "section.",
+			expected: "",
+		},
+		{
+			name:     "Key with multiple dots in subsection",
+			input:    "section.sub.section.key",
+			expected: "section.sub.section.key",
+		},
+		{
+			name:     "Key with uppercase subsection",
+			input:    "section.SUBSECTION.key",
+			expected: "section.SUBSECTION.key",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // capture range variable
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actual := canonicalizeKey(tc.input)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}

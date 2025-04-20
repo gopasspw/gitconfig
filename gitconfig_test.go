@@ -420,11 +420,11 @@ func TestUnset(t *testing.T) {
 
 ; HTTP
 [http]
-	sslVerify
+	sslverify
 
 [http "https://weak.example.com"]
-	sslVerify = false
-	cookieFile = /tmp/cookie.txt
+	sslverify = false
+	cookiefile = /tmp/cookie.txt
 `
 	assert.Equal(t, want, c.raw.String())
 }
@@ -545,8 +545,9 @@ func TestGitCliList(t *testing.T) {
 		left = strings.TrimSpace(left)
 		right = strings.TrimSpace(right)
 
-		t.Logf("% 38s | % 38s | %t", left, right, left != right)
+		// t.Logf("% 38s | % 38s | %t", left, right, left != right)
 		if left != right {
+			t.Logf("% 38s | % 38s | %t", left, right, left != right)
 			diffs++
 		}
 	}
