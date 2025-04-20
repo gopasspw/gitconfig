@@ -543,3 +543,187 @@ func TestConditionalInclude(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "rock", v)
 }
+
+// TestParseLineForComment tests the parseLineForComment function with various inputs.
+func TestParseLineForComment(t *testing.T) {
+	// Define test cases using a slice of structs.
+	// Each struct holds the input string and the expected output content and comment.
+	testCases := []struct {
+		name        string // Name for the specific test case
+		input       string // The input line to parse
+		wantContent string // The expected content part after parsing and processing
+		wantComment string // The expected comment part (raw, including delimiter)
+	}{
+		{
+			name:        "Double quotes with hash comment",
+			input:       `"foo#bar#baz" # comment1`,
+			wantContent: `foo#bar#baz`,
+			wantComment: ` # comment1`,
+		},
+		{
+			name:        "Single quotes with semicolon comment",
+			input:       `'foo;bar' ; comment2`,
+			wantContent: `foo;bar`,
+			wantComment: ` ; comment2`,
+		},
+		{
+			name:        "No quotes with hash comment",
+			input:       `no quotes here # comment3`,
+			wantContent: `no quotes here`,
+			wantComment: ` # comment3`,
+		},
+		{
+			name:        "Nested single quotes with hash comment",
+			input:       `"nested 'quotes' # works" # comment4`,
+			wantContent: `nested 'quotes' # works`,
+			wantComment: ` # comment4`,
+		},
+		{
+			name:        "Nested double quotes with semicolon comment",
+			input:       `'nested "quotes" ; works' ; comment5`,
+			wantContent: `nested "quotes" ; works`,
+			wantComment: ` ; comment5`,
+		},
+		{
+			name:        "No comment present",
+			input:       `no comment here`,
+			wantContent: `no comment here`,
+			wantComment: ``,
+		},
+		{
+			name:        "Leading space content with semicolon comment",
+			input:       `   "leading space content" ; comment6`,
+			wantContent: `leading space content`,
+			wantComment: ` ; comment6`,
+		},
+		{
+			name:        "Trailing space content and comment with hash",
+			input:       `trailing space content # comment7   `,
+			wantContent: `trailing space content`,
+			wantComment: ` # comment7   `, // Comment includes trailing spaces
+		},
+		{
+			name:        "Hash comment line",
+			input:       `# comment line`,
+			wantContent: ``, // Content before comment is empty
+			wantComment: `# comment line`,
+		},
+		{
+			name:        "Semicolon comment line",
+			input:       `; another comment line`,
+			wantContent: ``,
+			wantComment: `; another comment line`,
+		},
+		{
+			name:        "Quoted content spanning potential comment char",
+			input:       ` "quotes spanning ; comment char" `,
+			wantContent: `quotes spanning ; comment char`, // Quotes removed, no comment found
+			wantComment: ``,
+		},
+		{
+			name:  "Unterminated quote before hash comment",
+			input: ` "unterminated ' quote # comment"`,
+			// Content doesn't end with matching quote, so initial " is not removed
+			wantContent: `"unterminated ' quote`,
+			wantComment: ` # comment"`,
+		},
+		{
+			name:        "Hash inside quotes with comment outside",
+			input:       ` "hash # inside" # comment outside `,
+			wantContent: `hash # inside`, // Outer quotes removed
+			wantComment: ` # comment outside `,
+		},
+		{
+			name:        "Hash inside quotes part of string",
+			input:       ` string with #"# hash inside quotes`,
+			wantContent: `string with #"# hash inside quotes`, // No surrounding quotes, no comment found
+			wantComment: ``,
+		},
+		{
+			name:        "Empty input string",
+			input:       ``,
+			wantContent: ``,
+			wantComment: ``,
+		},
+		{
+			name:        "Whitespace only input string",
+			input:       `   `,
+			wantContent: ``,
+			wantComment: ``,
+		},
+		{
+			name:        "Key value pair like structure",
+			input:       `key = value # comment`,
+			wantContent: `key = value`,
+			wantComment: ` # comment`,
+		},
+		{
+			name:        "Only double quoted content",
+			input:       `"only quotes"`,
+			wantContent: `only quotes`, // Quotes removed
+			wantComment: ``,
+		},
+		{
+			name:        "Only single quoted content",
+			input:       `'single quotes'`,
+			wantContent: `single quotes`, // Quotes removed
+			wantComment: ``,
+		},
+		{
+			name:        "Mismatched surrounding quotes 1",
+			input:       ` " mismatched quote'`,
+			wantContent: `" mismatched quote'`, // Quotes not removed
+			wantComment: ``,
+		},
+		{
+			name:        "Mismatched surrounding quotes 2",
+			input:       ` 'mismatched quote"`,
+			wantContent: `'mismatched quote"`, // Quotes not removed
+			wantComment: ``,
+		},
+		{
+			name:        "Single quote only content",
+			input:       ` '`,
+			wantContent: `'`, // No removal (not matching pair)
+			wantComment: ``,
+		},
+		{
+			name:        "Double quote only content",
+			input:       `"`,
+			wantContent: `"`, // No removal
+			wantComment: ``,
+		},
+		{
+			name:        "Empty double quotes",
+			input:       `""`,
+			wantContent: ``, // Quotes removed, resulting in empty string
+			wantComment: ``,
+		},
+		{
+			name:        "Empty single quotes",
+			input:       `''`,
+			wantContent: ``, // Quotes removed
+			wantComment: ``,
+		},
+	}
+
+	// Iterate over the test cases
+	for _, tc := range testCases {
+		// Use t.Run() to run each test case as a subtest.
+		// This provides clearer output when tests fail.
+		t.Run(tc.name, func(t *testing.T) {
+			// Call the function under test
+			gotContent, gotComment := parseLineForComment(tc.input)
+
+			// Assert that the returned content matches the expected content
+			if gotContent != tc.wantContent {
+				t.Errorf("parseLineForComment(%q) got content %q, want %q", tc.input, gotContent, tc.wantContent)
+			}
+
+			// Assert that the returned comment matches the expected comment
+			if gotComment != tc.wantComment {
+				t.Errorf("parseLineForComment(%q) got comment %q, want %q", tc.input, gotComment, tc.wantComment)
+			}
+		})
+	}
+}

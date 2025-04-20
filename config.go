@@ -350,15 +350,8 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 			wKey = k
 		}
 
-		oValue := v
-		comment := ""
-
-		// Handle inline comments
-		if strings.ContainsAny(oValue, "#;") && !reQuotedComment.MatchString(oValue) {
-			comment = " " + oValue[strings.IndexAny(oValue, "#;"):]
-			oValue = oValue[:strings.IndexAny(oValue, "#;")]
-			oValue = strings.TrimSpace(oValue)
-		}
+		// extract possilbe comment from the value
+		oValue, comment := splitValueComment(v)
 
 		if key != "" && (key != fKey) {
 			continue
@@ -378,6 +371,104 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	}
 
 	return lines
+}
+
+func splitValueComment(rValue string) (string, string) {
+	// Trivial case: no comment. Return early, do not alter anything.
+	if !strings.ContainsAny(rValue, "#;") {
+		return rValue, ""
+	}
+
+	// Handle inline comments
+	// TODO: This doesn't handle more tricky cases, yet.
+	// Example: `foobar = "bar#foo#zen" # comment` won't work.
+
+	// Medium case: comment present, but not quoted.
+	if !reQuotedComment.MatchString(rValue) {
+		comment := " " + rValue[strings.IndexAny(rValue, "#;"):]
+		rValue = rValue[:strings.IndexAny(rValue, "#;")]
+		rValue = strings.TrimSpace(rValue)
+
+		return rValue, comment
+	}
+
+	// Hard case: comment present and quoted.
+	return parseLineForComment(rValue)
+}
+
+// parseLineForComment separates a line into content and comment parts.
+// It finds the first unquoted comment character (# or ;) to split the line.
+// It trims whitespace from the content part and removes matching surrounding
+// single (”) or double ("") quotes from it.
+// Uses break instead of goto.
+func parseLineForComment(line string) (content, comment string) {
+	commentStartIndex := -1 // Initialize to -1, indicating comment not found yet
+	inSingleQuotes := false
+	inDoubleQuotes := false
+	foundComment := false // Flag to signal when to break the loop
+
+	// Iterate through the string to find the first unquoted comment character
+	for i, r := range line {
+		switch r {
+		case '\'':
+			// Toggle single quote state only if not inside double quotes
+			if !inDoubleQuotes {
+				inSingleQuotes = !inSingleQuotes
+			}
+		case '"':
+			// Toggle double quote state only if not inside single quotes
+			if !inSingleQuotes {
+				inDoubleQuotes = !inDoubleQuotes
+			}
+		case '#', ';':
+			// Check for comment character only if not inside any quotes
+			if !inSingleQuotes && !inDoubleQuotes {
+				commentStartIndex = i // Record the index
+				foundComment = true   // Set flag to break loop
+			}
+		}
+		// Exit the loop immediately after finding the comment
+		if foundComment {
+			break // Exit the for loop
+		}
+	}
+	// No EndLoop label needed anymore
+
+	// Determine initial content and comment parts based on index
+	var initialContent string
+	if commentStartIndex != -1 {
+		// Comment character was found
+		initialContent = line[:commentStartIndex]
+		comment = line[commentStartIndex:] // Includes the comment char itself and everything after
+	} else {
+		// No unquoted comment character found in the entire line
+		initialContent = line // The whole line is potential content
+		comment = ""          // No comment part
+	}
+
+	// Trim whitespace from the initial content part FIRST
+	trimmedContent := strings.TrimSpace(initialContent)
+
+	// Now, check for and remove surrounding quotes from the trimmed content
+	n := len(trimmedContent)
+	if n >= 2 {
+		firstChar := trimmedContent[0]
+		lastChar := trimmedContent[n-1]
+		// Check if the first and last characters are matching quotes
+		if (firstChar == '\'' && lastChar == '\'') || (firstChar == '"' && lastChar == '"') {
+			// Assign the inner slice (removing the quotes) to content
+			content = trimmedContent[1 : n-1]
+		} else {
+			// No matching surrounding quotes, use the trimmed content as is
+			content = trimmedContent
+		}
+	} else {
+		// String is too short to have surrounding quotes, use the trimmed content
+		content = trimmedContent
+	}
+
+	// Return the processed content and the raw comment part
+	return content, comment
 }
 
 // NewFromMap allows creating a new preset config from a map.
