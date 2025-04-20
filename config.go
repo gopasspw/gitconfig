@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,8 +17,9 @@ import (
 )
 
 var (
-	keyValueTpl = "\t%s = %s%s"
-	keyTpl      = "\t%s%s"
+	keyValueTpl     = "\t%s = %s%s"
+	keyTpl          = "\t%s%s"
+	reQuotedComment = regexp.MustCompile(`["'][^"']*#[^"']*["']`)
 )
 
 // Config is a single parsed config file. It contains a reference of the input file, if any.
@@ -352,7 +354,7 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 		comment := ""
 
 		// Handle inline comments
-		if strings.ContainsAny(oValue, "#;") {
+		if strings.ContainsAny(oValue, "#;") && !reQuotedComment.MatchString(oValue) {
 			comment = " " + oValue[strings.IndexAny(oValue, "#;"):]
 			oValue = oValue[:strings.IndexAny(oValue, "#;")]
 			oValue = strings.TrimSpace(oValue)

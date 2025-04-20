@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -476,4 +477,55 @@ func TestListSubsections(t *testing.T) {
 	c := &Configs{global: ParseConfig(strings.NewReader(configSampleGopass))}
 	c.global.noWrites = true
 	assert.Equal(t, []string{"foo/sub", "work"}, c.ListSubsections("mounts"))
+}
+
+func TestGitCliList(t *testing.T) {
+	t.Parallel()
+
+	c := New()
+	c.NoWrites = true
+	c.LoadAll("./.git")
+
+	cmd := exec.CommandContext(t.Context(), "git", "config", "--list")
+	buf, err := cmd.Output()
+	require.NoError(t, err)
+	cliOut := strings.Split(string(buf), "\n")
+	sort.Strings(cliOut)
+	cliOut = func(s []string) []string {
+		out := make([]string, 0, len(s))
+		for _, l := range s {
+			if !strings.Contains(l, "=") {
+				continue
+			}
+			out = append(out, l)
+		}
+		return out
+	}(cliOut)
+
+	libOut := c.KVList("", "=")
+
+	// TODO: Enable this asserting when we have burned down all diffs.
+	// assert.Equal(t, cliOut, libOut)
+
+	diffs := 0
+	t.Logf("% 38s | % 38s | % 5s", "CLI", "LIB", "DIFF")
+	for i := 0; i < len(cliOut) || i < len(libOut); i++ {
+		left := ""
+		right := ""
+
+		if i < len(cliOut) {
+			left = cliOut[i]
+		}
+		if i < len(libOut) {
+			right = libOut[i]
+		}
+		left = strings.TrimSpace(left)
+		right = strings.TrimSpace(right)
+
+		t.Logf("% 38s | % 38s | %t", left, right, left != right)
+		if left != right {
+			diffs++
+		}
+	}
+	assert.Zero(t, diffs, "There are %d differences between the CLI and the library output", diffs)
 }
