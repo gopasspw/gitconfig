@@ -507,10 +507,12 @@ func TestGitCliList(t *testing.T) {
 			out = append(out, l)
 			prev = l
 		}
+
 		return out
 	}(cliOut)
 
 	libOut := c.KVList("", "=")
+	// filter duplicates
 	libOut = func(s []string) []string {
 		prev := ""
 		out := make([]string, 0, len(s))
@@ -521,6 +523,7 @@ func TestGitCliList(t *testing.T) {
 			out = append(out, l)
 			prev = l
 		}
+
 		return out
 	}(libOut)
 

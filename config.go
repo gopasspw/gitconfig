@@ -19,7 +19,7 @@ import (
 var (
 	keyValueTpl     = "\t%s = %s%s"
 	keyTpl          = "\t%s%s"
-	reQuotedComment = regexp.MustCompile(`["'][^"']*#[^"']*["']`)
+	reQuotedComment = regexp.MustCompile(`"[^"]*[#;][^"]*"`)
 )
 
 // Config is a single parsed config file. It contains a reference of the input file, if any.
@@ -379,10 +379,6 @@ func splitValueComment(rValue string) (string, string) {
 		return rValue, ""
 	}
 
-	// Handle inline comments
-	// TODO: This doesn't handle more tricky cases, yet.
-	// Example: `foobar = "bar#foo#zen" # comment` won't work.
-
 	// Medium case: comment present, but not quoted.
 	if !reQuotedComment.MatchString(rValue) {
 		comment := " " + rValue[strings.IndexAny(rValue, "#;"):]
@@ -394,78 +390,6 @@ func splitValueComment(rValue string) (string, string) {
 
 	// Hard case: comment present and quoted.
 	return parseLineForComment(rValue)
-}
-
-// parseLineForComment separates a line into content and comment parts.
-// It finds the first unquoted comment character (# or ;) to split the line.
-// It trims whitespace from the content part and removes matching surrounding
-// single (”) or double ("") quotes from it.
-// The returned comment string does NOT include the delimiter character itself
-// and is also trimmed of leading/trailing whitespace.
-func parseLineForComment(line string) (content string, comment string) {
-	commentStartIndex := -1 // Initialize to -1, indicating comment not found yet
-	inSingleQuotes := false
-	inDoubleQuotes := false
-	foundComment := false // Flag to signal when to break the loop
-
-	// Iterate through the string to find the first unquoted comment character
-	for i, r := range line {
-		switch r {
-		case '\'':
-			if !inDoubleQuotes {
-				inSingleQuotes = !inSingleQuotes
-			}
-		case '"':
-			if !inSingleQuotes {
-				inDoubleQuotes = !inDoubleQuotes
-			}
-		case '#', ';':
-			if !inSingleQuotes && !inDoubleQuotes {
-				commentStartIndex = i
-				foundComment = true
-			}
-		}
-		if foundComment {
-			break // Exit the for loop
-		}
-	}
-
-	// Determine initial content and comment parts based on index
-	var initialContent string
-	if commentStartIndex != -1 {
-		// Comment character was found
-		initialContent = line[:commentStartIndex]
-		// Extract comment text *after* the delimiter and trim whitespace
-		if commentStartIndex+1 <= len(line) { // Check index bounds
-			comment = strings.TrimSpace(line[commentStartIndex+1:])
-		} else {
-			comment = "" // Delimiter was the very last character
-		}
-	} else {
-		// No unquoted comment character found
-		initialContent = line
-		comment = ""
-	}
-
-	// Trim whitespace from the initial content part FIRST
-	trimmedContent := strings.TrimSpace(initialContent)
-
-	// Now, check for and remove surrounding quotes from the trimmed content
-	n := len(trimmedContent)
-	if n >= 2 {
-		firstChar := trimmedContent[0]
-		lastChar := trimmedContent[n-1]
-		if (firstChar == '\'' && lastChar == '\'') || (firstChar == '"' && lastChar == '"') {
-			content = trimmedContent[1 : n-1] // Remove surrounding quotes
-		} else {
-			content = trimmedContent // No surrounding quotes
-		}
-	} else {
-		content = trimmedContent // Too short for surrounding quotes
-	}
-
-	// Return the processed content and the processed comment part
-	return content, comment
 }
 
 // NewFromMap allows creating a new preset config from a map.
