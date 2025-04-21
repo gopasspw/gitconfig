@@ -28,6 +28,31 @@ func splitKey(key string) (section, subsection, skey string) { //nolint:nonamedr
 	return
 }
 
+func canonicalizeKey(key string) string {
+	if key == "" {
+		// invalid key, return empty string
+		return ""
+	}
+
+	section, subsection, skey := splitKey(key)
+	// "Section names are case-insensitive.""
+	section = strings.ToLower(section)
+	// "Subsection names are case sensitive."
+	// "The variable names are case-insensitive."
+	skey = strings.ToLower(skey)
+
+	if section == "" || skey == "" {
+		// invalid key, return empty string
+		return ""
+	}
+
+	if subsection == "" {
+		return section + "." + skey
+	}
+
+	return section + "." + subsection + "." + skey
+}
+
 func trim(s []string) {
 	for i, e := range s {
 		s[i] = strings.TrimSpace(e)
