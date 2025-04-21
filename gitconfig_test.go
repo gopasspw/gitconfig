@@ -286,13 +286,41 @@ var configSampleGopass = `
   insteadOf = foo.it
 `
 
-func TestGopass(t *testing.T) {
+func TestGopassSingleRead(t *testing.T) {
 	t.Parallel()
 
 	c := &Configs{
 		global: ParseConfig(strings.NewReader(configSampleGopass)),
 	}
 	c.global.noWrites = true
+
+	assert.Equal(t, "true", c.Get("generate.autoclip"))
+	assert.Equal(t, "true", c.Get("core.autoimport"))
+	assert.Equal(t, "45", c.Get("core.cliptimeout"))
+	assert.Equal(t, "vim", c.Get("core.editor"))
+	assert.Equal(t, "true", c.Get("core.exportkeys"))
+	assert.Equal(t, "false", c.Get("core.pager"))
+	assert.Equal(t, "true", c.Get("core.notifications"))
+	assert.Equal(t, "false", c.Get("show.safecontent"))
+	assert.Equal(t, []string{"foo.de", "foo.it"}, c.GetAll("domain-alias.foo.com.insteadOf"))
+
+	assert.Equal(t, "/home/johndoe/.password-store", c.Get("mounts.path"))
+	assert.Equal(t, "/home/johndoe/.password-store-foo-sub", c.Get("mounts.foo/sub.path"))
+	assert.Equal(t, "/home/johndoe/.password-store-work", c.Get("mounts.work.path"))
+
+	t.Logf("Raw:\n%s\n", c.global.raw.String())
+	t.Logf("Vars:\n%+v\n", c.global.vars)
+}
+
+func TestGopassReadWrite(t *testing.T) {
+	t.Parallel()
+
+	td := t.TempDir()
+	sysCfg := filepath.Join(td, "system", "config")
+
+	// TODO(finish test setup)
+
+	c := New()
 
 	assert.Equal(t, "true", c.Get("generate.autoclip"))
 	assert.Equal(t, "true", c.Get("core.autoimport"))
@@ -359,28 +387,6 @@ func TestParseDocs(t *testing.T) {
 	v, ok := c.Get("core.sshCommand")
 	assert.True(t, ok)
 	assert.Equal(t, "ssh -oControlMaster=auto -oControlPersist=600 -oControlPath=/tmp/.ssh-%C", v)
-}
-
-func TestGitBinary(t *testing.T) {
-	t.Skip("not ready, yet") // TODO(gitconfig) make tests pass
-
-	cfgs := New()
-	cfgs.LoadAll(".")
-
-	cmd := exec.Command("git", "config", "--list")
-	buf, err := cmd.Output()
-	require.NoError(t, err)
-	lines := strings.Split(string(buf), "\n")
-	for _, line := range lines {
-		p := strings.SplitN(line, "=", 2)
-		if len(p) < 2 {
-			continue
-		}
-		key := p[0]
-		want := p[1]
-
-		assert.Equal(t, want, cfgs.Get(key), key)
-	}
 }
 
 func TestSet(t *testing.T) {
@@ -477,6 +483,28 @@ func TestListSubsections(t *testing.T) {
 	c := &Configs{global: ParseConfig(strings.NewReader(configSampleGopass))}
 	c.global.noWrites = true
 	assert.Equal(t, []string{"foo/sub", "work"}, c.ListSubsections("mounts"))
+}
+
+func TestGitBinary(t *testing.T) {
+	t.Skip("not ready, yet") // TODO(gitconfig) make tests pass
+
+	cfgs := New()
+	cfgs.LoadAll(".")
+
+	cmd := exec.Command("git", "config", "--list")
+	buf, err := cmd.Output()
+	require.NoError(t, err)
+	lines := strings.Split(string(buf), "\n")
+	for _, line := range lines {
+		p := strings.SplitN(line, "=", 2)
+		if len(p) < 2 {
+			continue
+		}
+		key := p[0]
+		want := p[1]
+
+		assert.Equal(t, want, cfgs.Get(key), key)
+	}
 }
 
 func TestGitCliList(t *testing.T) {
