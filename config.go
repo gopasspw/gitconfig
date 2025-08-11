@@ -20,7 +20,7 @@ var (
 	keyValueTpl     = "\t%s = %s%s"
 	keyTpl          = "\t%s%s"
 	reQuotedComment = regexp.MustCompile(`"[^"]*[#;][^"]*"`)
-	// "The variable names are case-insensitive, allow only alphanumeric characters and -, and must start with an alphabetic character.""
+	// "The variable names are case-insensitive, allow only alphanumeric characters and -, and must start with an alphabetic character."".
 	reValidKey = regexp.MustCompile(`^[a-z]+[a-z0-9-]*$`)
 )
 
@@ -402,6 +402,7 @@ func splitValueComment(rValue string) (string, string) {
 	if !strings.ContainsAny(rValue, "#;") {
 		// "If value needs to contain leading or trailing whitespace characters, it must be enclosed in double quotation marks (")."
 		rValue = strings.Trim(rValue, "\"")
+
 		return rValue, ""
 	}
 
@@ -488,6 +489,7 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 		path, found := c.GetAll(k)
 		if !found {
 			debug.V(3).Log("skipping include candidate %q, no path found", k)
+
 			continue
 		}
 		out = append(out, path...)
