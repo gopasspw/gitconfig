@@ -56,6 +56,8 @@ func (c *Config) Unset(key string) error {
 		return nil
 	}
 
+	key = canonicalizeKey(key)
+
 	_, present := c.vars[key]
 	if !present {
 		return nil
@@ -70,6 +72,7 @@ func (c *Config) Unset(key string) error {
 
 // Get returns the first value of the key.
 func (c *Config) Get(key string) (string, bool) {
+	key = canonicalizeKey(key)
 	vs, found := c.vars[key]
 	if !found || len(vs) < 1 {
 		return "", false
@@ -80,6 +83,7 @@ func (c *Config) Get(key string) (string, bool) {
 
 // GetAll returns all values of the key.
 func (c *Config) GetAll(key string) ([]string, bool) {
+	key = canonicalizeKey(key)
 	vs, found := c.vars[key]
 	if !found {
 		return nil, false
@@ -90,6 +94,7 @@ func (c *Config) GetAll(key string) ([]string, bool) {
 
 // IsSet returns true if the key was set in this config.
 func (c *Config) IsSet(key string) bool {
+	key = canonicalizeKey(key)
 	_, present := c.vars[key]
 
 	return present
@@ -377,6 +382,7 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 		}
 
 		newLine, skip := cb(fKey, wKey, oValue, comment, fullLine)
+		debug.V(3).Log("parsed line: %q -> %q, skip: %t", fullLine, newLine, skip)
 		if skip {
 			// remove the last line
 			lines = lines[:len(lines)-1]
@@ -469,7 +475,7 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 		// must have the form includeIf.<condition>.path
 		// e.g. includeIf."gitdir:/path/to/group/".path
 		// see https://git-scm.com/docs/git-config#_conditional_includes
-		if !strings.HasPrefix(k, "includeIf.") || !strings.HasSuffix(k, ".path") {
+		if !strings.HasPrefix(k, "includeif.") || !strings.HasSuffix(k, ".path") {
 			continue
 		}
 		candidates = append(candidates, k)
@@ -479,6 +485,7 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 	for _, k := range filterCandidates(candidates, workdir) {
 		path, found := c.GetAll(k)
 		if !found {
+			debug.V(3).Log("skipping include candidate %q, no path found", k)
 			continue
 		}
 		out = append(out, path...)
@@ -494,7 +501,7 @@ func filterCandidates(candidates []string, workdir string) []string {
 	out := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		sec, subsec, key := splitKey(candidate)
-		if sec != "includeIf" || subsec == "" || key != "path" {
+		if sec != "includeif" || subsec == "" || key != "path" {
 			debug.V(3).Log("skipping invalid include candidate %q", candidate)
 
 			continue
@@ -653,6 +660,7 @@ func ParseConfig(r io.Reader) *Config {
 	}
 
 	lines := parseConfig(r, "", "", func(fk, k, v, comment, _ string) (string, bool) {
+		fk = canonicalizeKey(fk)
 		c.vars[fk] = append(c.vars[fk], v)
 
 		return formatKeyValue(k, v, comment), false

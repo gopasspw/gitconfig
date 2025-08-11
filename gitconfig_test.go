@@ -313,14 +313,44 @@ func TestGopassSingleRead(t *testing.T) {
 }
 
 func TestGopassReadWrite(t *testing.T) {
-	t.Parallel()
-
 	td := t.TempDir()
 	sysCfg := filepath.Join(td, "system", "config")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sysCfg), 0o700))
+	require.NoError(t, os.WriteFile(sysCfg, []byte(`[core]
+	autoimport = true
+	editor = vim
+	cliptimeout = 45
+	exportkeys = true
+	pager = false
+	notifications = true
+	`), 0o600))
 
-	// TODO(finish test setup)
+	globalCfg := filepath.Join(td, "global", "config")
+	require.NoError(t, os.MkdirAll(filepath.Dir(globalCfg), 0o700))
+	require.NoError(t, os.WriteFile(globalCfg, []byte(`[generate]
+	autoclip = true
+	pager = false
+	[show]
+	safecontent = false
+	[mounts]
+	path = /home/johndoe/.password-store
+	[mounts "foo/sub"]
+	path = /home/johndoe/.password-store-foo-sub
+	[mounts "work"]
+	path = /home/johndoe/.password-store-work
+	[domain-alias "foo.com"]
+	insteadOf = foo.de
+	[domain-alias "foo.com"]
+	insteadOf = foo.it
+`), 0o600))
+
+	t.Setenv("GOPASS_HOMEDIR", td)
 
 	c := New()
+	c.SystemConfig = sysCfg
+	c.GlobalConfig = filepath.Join("global", "config")
+	c.global.path = globalCfg
+	c.LoadAll(td)
 
 	assert.Equal(t, "true", c.Get("generate.autoclip"))
 	assert.Equal(t, "true", c.Get("core.autoimport"))
@@ -371,7 +401,8 @@ func TestParseComplex(t *testing.T) {
 
 	c := ParseConfig(strings.NewReader(configSampleComplex))
 
-	_, ok := c.vars["core.sshCommand"]
+	// variable names are case-insensitive
+	_, ok := c.vars["core.sshcommand"]
 	assert.True(t, ok)
 
 	v, ok := c.Get("core.sshCommand")
