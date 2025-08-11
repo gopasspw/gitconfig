@@ -457,11 +457,11 @@ func TestUnset(t *testing.T) {
 
 ; HTTP
 [http]
-	sslverify
+	sslVerify
 
 [http "https://weak.example.com"]
-	sslverify = false
-	cookiefile = /tmp/cookie.txt
+	sslVerify = false
+	cookieFile = /tmp/cookie.txt
 `
 	assert.Equal(t, want, c.raw.String())
 }

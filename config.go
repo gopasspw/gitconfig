@@ -350,6 +350,8 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 		k = strings.TrimSpace(k)
 		v = strings.TrimSpace(v)
 
+		// keep a copy of the original key for serialization.
+		ok := k
 		// "The variable names are case-insensitive"
 		k = strings.ToLower(k)
 
@@ -365,7 +367,7 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 		}
 		fKey += k
 		if key == "" {
-			wKey = k
+			wKey = ok
 		}
 
 		// extract possilbe comment from the value
