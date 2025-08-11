@@ -286,13 +286,71 @@ var configSampleGopass = `
   insteadOf = foo.it
 `
 
-func TestGopass(t *testing.T) {
+func TestGopassSingleRead(t *testing.T) {
 	t.Parallel()
 
 	c := &Configs{
 		global: ParseConfig(strings.NewReader(configSampleGopass)),
 	}
 	c.global.noWrites = true
+
+	assert.Equal(t, "true", c.Get("generate.autoclip"))
+	assert.Equal(t, "true", c.Get("core.autoimport"))
+	assert.Equal(t, "45", c.Get("core.cliptimeout"))
+	assert.Equal(t, "vim", c.Get("core.editor"))
+	assert.Equal(t, "true", c.Get("core.exportkeys"))
+	assert.Equal(t, "false", c.Get("core.pager"))
+	assert.Equal(t, "true", c.Get("core.notifications"))
+	assert.Equal(t, "false", c.Get("show.safecontent"))
+	assert.Equal(t, []string{"foo.de", "foo.it"}, c.GetAll("domain-alias.foo.com.insteadOf"))
+
+	assert.Equal(t, "/home/johndoe/.password-store", c.Get("mounts.path"))
+	assert.Equal(t, "/home/johndoe/.password-store-foo-sub", c.Get("mounts.foo/sub.path"))
+	assert.Equal(t, "/home/johndoe/.password-store-work", c.Get("mounts.work.path"))
+
+	t.Logf("Raw:\n%s\n", c.global.raw.String())
+	t.Logf("Vars:\n%+v\n", c.global.vars)
+}
+
+func TestGopassReadWrite(t *testing.T) {
+	td := t.TempDir()
+	sysCfg := filepath.Join(td, "system", "config")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sysCfg), 0o700))
+	require.NoError(t, os.WriteFile(sysCfg, []byte(`[core]
+	autoimport = true
+	editor = vim
+	cliptimeout = 45
+	exportkeys = true
+	pager = false
+	notifications = true
+	`), 0o600))
+
+	globalCfg := filepath.Join(td, "global", "config")
+	require.NoError(t, os.MkdirAll(filepath.Dir(globalCfg), 0o700))
+	require.NoError(t, os.WriteFile(globalCfg, []byte(`[generate]
+	autoclip = true
+	pager = false
+	[show]
+	safecontent = false
+	[mounts]
+	path = /home/johndoe/.password-store
+	[mounts "foo/sub"]
+	path = /home/johndoe/.password-store-foo-sub
+	[mounts "work"]
+	path = /home/johndoe/.password-store-work
+	[domain-alias "foo.com"]
+	insteadOf = foo.de
+	[domain-alias "foo.com"]
+	insteadOf = foo.it
+`), 0o600))
+
+	t.Setenv("GOPASS_HOMEDIR", td)
+
+	c := New()
+	c.SystemConfig = sysCfg
+	c.GlobalConfig = filepath.Join("global", "config")
+	c.global.path = globalCfg
+	c.LoadAll(td)
 
 	assert.Equal(t, "true", c.Get("generate.autoclip"))
 	assert.Equal(t, "true", c.Get("core.autoimport"))
@@ -343,7 +401,8 @@ func TestParseComplex(t *testing.T) {
 
 	c := ParseConfig(strings.NewReader(configSampleComplex))
 
-	_, ok := c.vars["core.sshCommand"]
+	// variable names are case-insensitive
+	_, ok := c.vars["core.sshcommand"]
 	assert.True(t, ok)
 
 	v, ok := c.Get("core.sshCommand")
@@ -359,28 +418,6 @@ func TestParseDocs(t *testing.T) {
 	v, ok := c.Get("core.sshCommand")
 	assert.True(t, ok)
 	assert.Equal(t, "ssh -oControlMaster=auto -oControlPersist=600 -oControlPath=/tmp/.ssh-%C", v)
-}
-
-func TestGitBinary(t *testing.T) {
-	t.Skip("not ready, yet") // TODO(gitconfig) make tests pass
-
-	cfgs := New()
-	cfgs.LoadAll(".")
-
-	cmd := exec.Command("git", "config", "--list")
-	buf, err := cmd.Output()
-	require.NoError(t, err)
-	lines := strings.Split(string(buf), "\n")
-	for _, line := range lines {
-		p := strings.SplitN(line, "=", 2)
-		if len(p) < 2 {
-			continue
-		}
-		key := p[0]
-		want := p[1]
-
-		assert.Equal(t, want, cfgs.Get(key), key)
-	}
 }
 
 func TestSet(t *testing.T) {
@@ -479,6 +516,28 @@ func TestListSubsections(t *testing.T) {
 	assert.Equal(t, []string{"foo/sub", "work"}, c.ListSubsections("mounts"))
 }
 
+func TestGitBinary(t *testing.T) {
+	t.Skip("not ready, yet") // TODO(gitconfig) make tests pass
+
+	cfgs := New()
+	cfgs.LoadAll(".")
+
+	cmd := exec.Command("git", "config", "--list")
+	buf, err := cmd.Output()
+	require.NoError(t, err)
+	lines := strings.Split(string(buf), "\n")
+	for _, line := range lines {
+		p := strings.SplitN(line, "=", 2)
+		if len(p) < 2 {
+			continue
+		}
+		key := p[0]
+		want := p[1]
+
+		assert.Equal(t, want, cfgs.Get(key), key)
+	}
+}
+
 func TestGitCliList(t *testing.T) {
 	t.Parallel()
 
@@ -545,8 +604,9 @@ func TestGitCliList(t *testing.T) {
 		left = strings.TrimSpace(left)
 		right = strings.TrimSpace(right)
 
-		t.Logf("% 38s | % 38s | %t", left, right, left != right)
+		// t.Logf("% 38s | % 38s | %t", left, right, left != right)
 		if left != right {
+			t.Logf("% 38s | % 38s | %t", left, right, left != right)
 			diffs++
 		}
 	}

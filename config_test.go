@@ -543,3 +543,52 @@ func TestConditionalInclude(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "rock", v)
 }
+
+func TestUnescapeValue(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		input    string
+		expected string
+	}{
+		"no escape sequences": {
+			input:    "plain text",
+			expected: "plain text",
+		},
+		"newline escape": {
+			input:    "line1\\nline2",
+			expected: "line1\nline2",
+		},
+		"tab escape": {
+			input:    "key\\tvalue",
+			expected: "key\tvalue",
+		},
+		"backspace escape": {
+			input:    "abc\\bdef",
+			expected: "abc\bdef",
+		},
+		"double quote escape": {
+			input:    "value with \\\"quotes\\\"",
+			expected: `value with "quotes"`,
+		},
+		"backslash escape": {
+			input:    "path\\\\of\\\\file",
+			expected: "path\\of\\file",
+		},
+		"multiple escapes": {
+			input:    "line1\\nline2\\tkey\\bvalue\\\"quoted\\\"\\\\path",
+			expected: "line1\nline2\tkey\bvalue\"quoted\"\\path",
+		},
+		"invalid escape sequences": {
+			input:    "invalid\\xescape",
+			expected: "invalid\\xescape",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := unescapeValue(tc.input)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
