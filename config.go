@@ -273,7 +273,7 @@ func (c *Config) flushRaw() error {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
-		return err
+		return fmt.Errorf("failed to create directory %q for %q: %w", filepath.Dir(c.path), c.path, err)
 	}
 
 	debug.V(3).Log("writing config to %s: \n--------------\n%s\n--------------", c.path, c.raw.String())
