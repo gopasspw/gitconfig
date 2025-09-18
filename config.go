@@ -35,6 +35,7 @@ type Config struct {
 	noWrites bool // do not persist changes to disk (e.g. for tests)
 	raw      strings.Builder
 	vars     map[string][]string
+	branch   string
 }
 
 // IsEmpty returns true if the config is empty (typically a newly initialized config, but still unused).
@@ -463,7 +464,37 @@ func LoadConfig(fn string) (*Config, error) {
 // LoadConfigWithWorkdir tries to load a gitconfig from the given path and
 // a workdir. The workdir is used to resolve relative paths in the config.
 func LoadConfigWithWorkdir(fn, workdir string) (*Config, error) {
-	return loadConfigs(fn, workdir)
+	c, err := loadConfigs(fn, workdir)
+	if err != nil {
+		return nil, err
+	}
+	c.branch = readGitBranch(workdir)
+	return c, nil
+}
+
+func readGitBranch(workdir string) string {
+	if workdir == "" {
+		return ""
+	}
+	gitDir := filepath.Join(workdir, ".git")
+	// check if .git is a directory
+	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
+		// it might be a file with gitdir: path, not handled for now
+		return ""
+	}
+
+	headFile := filepath.Join(gitDir, "HEAD")
+	content, err := os.ReadFile(headFile)
+	if err != nil {
+		return ""
+	}
+
+	// content is like "ref: refs/heads/main"
+	if strings.HasPrefix(string(content), "ref: refs/heads/") {
+		return strings.TrimSpace(strings.TrimPrefix(string(content), "ref: refs/heads/"))
+	}
+
+	return "" // detached HEAD or other cases
 }
 
 func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
@@ -490,7 +521,7 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 	}
 
 	out := make([]string, 0, len(candidates))
-	for _, k := range filterCandidates(candidates, workdir) {
+	for _, k := range filterCandidates(candidates, workdir, c) {
 		path, found := c.GetAll(k)
 		if !found {
 			debug.V(3).Log("skipping include candidate %q, no path found", k)
@@ -506,39 +537,61 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 // filterCandidates filters the candidates for include paths.
 // Currently only the gitdir condition is supported.
 // Others might be added in the future.
-func filterCandidates(candidates []string, workdir string) []string {
+func filterCandidates(candidates []string, workdir string, c *Config) []string {
 	out := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		sec, subsec, key := splitKey(candidate)
 		if sec != "includeif" || subsec == "" || key != "path" {
 			debug.V(3).Log("skipping invalid include candidate %q", candidate)
-
 			continue
 		}
 
-		// We only support gitdir: for now.
-		if !strings.HasPrefix(subsec, "gitdir:") {
+		matched := false
+		if strings.HasPrefix(subsec, "gitdir:") {
+			p := strings.SplitN(subsec, ":", 2)
+			dir := p[1]
+
+			if strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/") || prefixMatch(dir, workdir) {
+				matched = true
+			} else {
+				debug.V(3).Log("skipping include candidate %q, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", candidate, workdir, dir, dir, workdir)
+			}
+		} else if strings.HasPrefix(subsec, "gitdir/i:") {
+			p := strings.SplitN(subsec, ":", 2)
+			dir := p[1]
+
+			if strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/")) || prefixMatchFold(dir, workdir) {
+				matched = true
+			} else {
+				debug.V(3).Log("skipping include candidate %q, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", candidate, workdir, dir, dir, workdir)
+			}
+		} else if strings.HasPrefix(subsec, "onbranch:") {
+			p := strings.SplitN(subsec, ":", 2)
+			branchPattern := p[1]
+			if c.branch != "" {
+				match, err := filepath.Match(branchPattern, c.branch)
+				if err != nil {
+					debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
+				} else if match {
+					matched = true
+				}
+			}
+		} else {
 			debug.V(3).Log("skipping unsupported include candidate %q", candidate)
-
-			continue
 		}
 
-		p := strings.Split(subsec, ":")
-		// We have checked that there is a colon above.
-		dir := p[1]
-
-		// Either it is a full match or a prefix match.
-		if strings.TrimSuffix(workdir, "/") != strings.TrimSuffix(dir, "/") && !prefixMatch(dir, workdir) {
-			debug.V(3).Log("skipping include candidate %q, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", candidate, workdir, dir, dir, workdir)
-
-			continue
+		if matched {
+			out = append(out, candidate)
 		}
-
-		// We have a match, so we can add the path to the list.
-		out = append(out, candidate)
 	}
-
 	return out
+}
+
+func prefixMatchFold(path, prefix string) bool {
+	if !strings.HasSuffix(prefix, "/") {
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(path), strings.ToLower(prefix))
 }
 
 func prefixMatch(path, prefix string) bool {
