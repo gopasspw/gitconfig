@@ -546,45 +546,54 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 			continue
 		}
 
-		matched := false
-		if strings.HasPrefix(subsec, "gitdir:") {
-			p := strings.SplitN(subsec, ":", 2)
-			dir := p[1]
-
-			if strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/") || prefixMatch(dir, workdir) {
-				matched = true
-			} else {
-				debug.V(3).Log("skipping include candidate %q, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", candidate, workdir, dir, dir, workdir)
-			}
-		} else if strings.HasPrefix(subsec, "gitdir/i:") {
-			p := strings.SplitN(subsec, ":", 2)
-			dir := p[1]
-
-			if strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/")) || prefixMatchFold(dir, workdir) {
-				matched = true
-			} else {
-				debug.V(3).Log("skipping include candidate %q, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", candidate, workdir, dir, dir, workdir)
-			}
-		} else if strings.HasPrefix(subsec, "onbranch:") {
-			p := strings.SplitN(subsec, ":", 2)
-			branchPattern := p[1]
-			if c.branch != "" {
-				match, err := filepath.Match(branchPattern, c.branch)
-				if err != nil {
-					debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
-				} else if match {
-					matched = true
-				}
-			}
-		} else {
-			debug.V(3).Log("skipping unsupported include candidate %q", candidate)
-		}
-
-		if matched {
+		if matchSubSection(subsec, workdir, c) {
 			out = append(out, candidate)
 		}
 	}
 	return out
+}
+
+func matchSubSection(subsec, workdir string, c *Config) bool {
+	if strings.HasPrefix(subsec, "gitdir:") {
+		p := strings.SplitN(subsec, ":", 2)
+		dir := p[1]
+
+		if strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/") || prefixMatch(dir, workdir) {
+			return true
+		}
+		debug.V(3).Log("skipping include candidate, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", subsec, workdir, dir, dir, workdir)
+		return false
+	}
+
+	if strings.HasPrefix(subsec, "gitdir/i:") {
+		p := strings.SplitN(subsec, ":", 2)
+		dir := p[1]
+
+		if strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/")) || prefixMatchFold(dir, workdir) {
+			return true
+		}
+		debug.V(3).Log("skipping include candidate, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", subsec, workdir, dir, dir, workdir)
+		return false
+	}
+
+	if strings.HasPrefix(subsec, "onbranch:") {
+		p := strings.SplitN(subsec, ":", 2)
+		branchPattern := p[1]
+		if c.branch != "" {
+			match, err := filepath.Match(branchPattern, c.branch)
+			if err != nil {
+				debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
+				return false
+			}
+			if match {
+				return true
+			}
+		}
+		return false
+	}
+
+	debug.V(3).Log("skipping unsupported include candidate %q", subsec)
+	return false
 }
 
 func prefixMatchFold(path, prefix string) bool {
