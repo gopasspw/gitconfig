@@ -554,22 +554,19 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 }
 
 func matchSubSection(subsec, workdir string, c *Config) bool {
-	if strings.HasPrefix(subsec, "gitdir:") {
+	if strings.HasPrefix(subsec, "gitdir") {
+		caseInsensitive := strings.Contains(subsec, "/i:")
 		p := strings.SplitN(subsec, ":", 2)
 		dir := p[1]
 
-		if strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/") || prefixMatch(dir, workdir) {
-			return true
+		var exactMatch bool
+		if caseInsensitive {
+			exactMatch = strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/"))
+		} else {
+			exactMatch = strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/")
 		}
-		debug.V(3).Log("skipping include candidate, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", subsec, workdir, dir, dir, workdir)
-		return false
-	}
 
-	if strings.HasPrefix(subsec, "gitdir/i:") {
-		p := strings.SplitN(subsec, ":", 2)
-		dir := p[1]
-
-		if strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/")) || prefixMatchFold(dir, workdir) {
+		if exactMatch || prefixMatch(dir, workdir, caseInsensitive) {
 			return true
 		}
 		debug.V(3).Log("skipping include candidate, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", subsec, workdir, dir, dir, workdir)
@@ -596,18 +593,13 @@ func matchSubSection(subsec, workdir string, c *Config) bool {
 	return false
 }
 
-func prefixMatchFold(path, prefix string) bool {
+func prefixMatch(path, prefix string, fold bool) bool {
 	if !strings.HasSuffix(prefix, "/") {
 		return false
 	}
-	return strings.HasPrefix(strings.ToLower(path), strings.ToLower(prefix))
-}
-
-func prefixMatch(path, prefix string) bool {
-	if !strings.HasSuffix(prefix, "/") {
-		return false
+	if fold {
+		return strings.HasPrefix(strings.ToLower(path), strings.ToLower(prefix))
 	}
-
 	return strings.HasPrefix(path, prefix)
 }
 
