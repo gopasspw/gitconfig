@@ -468,7 +468,6 @@ func LoadConfigWithWorkdir(fn, workdir string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.branch = readGitBranch(workdir)
 
 	return c, nil
 }
@@ -491,8 +490,8 @@ func readGitBranch(workdir string) string {
 	}
 
 	// content is like "ref: refs/heads/main"
-	if strings.HasPrefix(string(content), "ref: refs/heads/") {
-		return strings.TrimSpace(strings.TrimPrefix(string(content), "ref: refs/heads/"))
+	if branch, found := strings.CutPrefix(string(content), "ref: refs/heads/"); found {
+		return strings.TrimSpace(branch)
 	}
 
 	return "" // detached HEAD or other cases
@@ -512,6 +511,7 @@ func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
 func getConditionalIncludes(c *Config, workdir string) []string {
 	candidates := []string{}
 	for k := range c.vars {
+		debug.V(3).Log("found config key: %q", k)
 		// must have the form includeIf.<condition>.path
 		// e.g. includeIf."gitdir:/path/to/group/".path
 		// see https://git-scm.com/docs/git-config#_conditional_includes
@@ -583,12 +583,14 @@ func matchSubSection(subsec, workdir string, c *Config) bool {
 		if c.branch == "" {
 			return false
 		}
+
 		match, err := filepath.Match(branchPattern, c.branch)
 		if err != nil {
 			debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
 
 			return false
 		}
+		// TODO(GH-109): support double wildcard patterns
 		if match {
 			return true
 		}
@@ -618,6 +620,7 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 		return nil, err
 	}
 	c.path = fn
+	c.branch = readGitBranch(workdir)
 
 	loadedConfigs := map[string]struct{}{
 		fn: {},
@@ -646,6 +649,7 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 			continue
 		}
 
+		debug.V(2).Log("loading nested config %q", head)
 		nc, err := loadConfig(head)
 		if err != nil {
 			return nil, err

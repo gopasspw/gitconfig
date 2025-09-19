@@ -45,7 +45,7 @@ func TestConditionalIncludeOnBranch(t *testing.T) {
 	int = 7
   [includeIf "onbranch:main"]
 	path = main.config
-  [includeIf "onbranch:feat*"]
+  [includeIf "onbranch:feat/*"]
     path = feat.config`), 0o600))
 
 	// main.config, should be included on main branch
