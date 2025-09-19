@@ -46,7 +46,9 @@ func TestConditionalIncludeOnBranch(t *testing.T) {
   [includeIf "onbranch:main"]
 	path = main.config
   [includeIf "onbranch:feat/*"]
-    path = feat.config`), 0o600))
+    path = feat.config
+  [includeIf "onbranch:feat/**/test"]
+    path = feat-test.config`), 0o600))
 
 	// main.config, should be included on main branch
 	fnMain := filepath.Join(td, "main.config")
@@ -57,6 +59,11 @@ func TestConditionalIncludeOnBranch(t *testing.T) {
 	fnFeat := filepath.Join(td, "feat.config")
 	require.NoError(t, os.WriteFile(fnFeat, []byte(`[core]
 	int = 9`), 0o600))
+
+	// feat-test.config, should be included on feature test branches
+	fnFeatTest := filepath.Join(td, "feat-test.config")
+	require.NoError(t, os.WriteFile(fnFeatTest, []byte(`[core]
+	int = 10`), 0o600))
 
 	// test with no branch set
 	cfg, err := LoadConfig(fn)
@@ -80,7 +87,15 @@ func TestConditionalIncludeOnBranch(t *testing.T) {
 	require.NoError(t, err)
 	vs, ok = cfg.GetAll("core.int")
 	assert.True(t, ok)
-	assert.Equal(t, []string{"7", "9"}, vs)
+	assert.ElementsMatch(t, []string{"7", "9", "10"}, vs)
+
+	// test with feature test branch
+	require.NoError(t, os.WriteFile(filepath.Join(td, ".git", "HEAD"), []byte("ref: refs/heads/feat/foo/bar/test"), 0o644))
+	cfg, err = LoadConfigWithWorkdir(fn, td)
+	require.NoError(t, err)
+	vs, ok = cfg.GetAll("core.int")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"7", "10"}, vs)
 }
 
 func TestConditionalIncludeGitDirI(t *testing.T) {
