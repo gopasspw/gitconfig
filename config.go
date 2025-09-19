@@ -22,6 +22,9 @@ var (
 	reQuotedComment = regexp.MustCompile(`"[^"]*[#;][^"]*"`)
 	// "The variable names are case-insensitive, allow only alphanumeric characters and -, and must start with an alphabetic character."".
 	reValidKey = regexp.MustCompile(`^[a-z]+[a-z0-9-]*$`)
+
+	// CompatMode enables compatibility mode, which disables certain features like value unescaping.
+	CompatMode bool
 )
 
 // Config is a single parsed config file. It contains a reference of the input file, if any.
@@ -374,7 +377,9 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 		oValue, comment := splitValueComment(v)
 
 		// unescape value
-		oValue = unescapeValue(oValue)
+		if !CompatMode {
+			oValue = unescapeValue(oValue)
+		}
 
 		if key != "" && (key != fKey) {
 			continue
