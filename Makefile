@@ -1,4 +1,5 @@
 GO                        ?= GO111MODULE=on CGO_ENABLED=0 go
+GOFILES_NOVENDOR          := $(shell find . -name vendor -prune -o -type f -name '*.go' -not -name '*.pb.go' -print)
 OK := $(shell tput setaf 6; echo ' [OK]'; tput sgr0;)
 
 crosscompile:
@@ -32,5 +33,11 @@ test:
 
 	@echo -n "     UNIT TESTS "
 	@$(GO) test -v
+
+fmt:
+	@keep-sorted --mode fix $(GOFILES_NOVENDOR)
+	@gofumpt -w $(GOFILES_NOVENDOR)
+	@$(GO) mod tidy
+
 
 .PHONY: clean build crosscompile test codequality

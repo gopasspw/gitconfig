@@ -469,6 +469,7 @@ func LoadConfigWithWorkdir(fn, workdir string) (*Config, error) {
 		return nil, err
 	}
 	c.branch = readGitBranch(workdir)
+
 	return c, nil
 }
 
@@ -543,6 +544,7 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 		sec, subsec, key := splitKey(candidate)
 		if sec != "includeif" || subsec == "" || key != "path" {
 			debug.V(3).Log("skipping invalid include candidate %q", candidate)
+
 			continue
 		}
 
@@ -550,6 +552,7 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 			out = append(out, candidate)
 		}
 	}
+
 	return out
 }
 
@@ -570,26 +573,31 @@ func matchSubSection(subsec, workdir string, c *Config) bool {
 			return true
 		}
 		debug.V(3).Log("skipping include candidate, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", subsec, workdir, dir, dir, workdir)
+
 		return false
 	}
 
 	if strings.HasPrefix(subsec, "onbranch:") {
 		p := strings.SplitN(subsec, ":", 2)
 		branchPattern := p[1]
-		if c.branch != "" {
-			match, err := filepath.Match(branchPattern, c.branch)
-			if err != nil {
-				debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
-				return false
-			}
-			if match {
-				return true
-			}
+		if c.branch == "" {
+			return false
 		}
+		match, err := filepath.Match(branchPattern, c.branch)
+		if err != nil {
+			debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
+
+			return false
+		}
+		if match {
+			return true
+		}
+
 		return false
 	}
 
 	debug.V(3).Log("skipping unsupported include candidate %q", subsec)
+
 	return false
 }
 
@@ -600,6 +608,7 @@ func prefixMatch(path, prefix string, fold bool) bool {
 	if fold {
 		return strings.HasPrefix(strings.ToLower(path), strings.ToLower(prefix))
 	}
+
 	return strings.HasPrefix(path, prefix)
 }
 

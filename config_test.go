@@ -66,8 +66,8 @@ func TestConditionalIncludeOnBranch(t *testing.T) {
 	assert.Equal(t, []string{"7"}, vs)
 
 	// test with main branch
-	require.NoError(t, os.MkdirAll(filepath.Join(td, ".git"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(td, ".git", "HEAD"), []byte("ref: refs/heads/main"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(td, ".git"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(td, ".git", "HEAD"), []byte("ref: refs/heads/main"), 0o644))
 	cfg, err = LoadConfigWithWorkdir(fn, td)
 	require.NoError(t, err)
 	vs, ok = cfg.GetAll("core.int")
@@ -75,7 +75,7 @@ func TestConditionalIncludeOnBranch(t *testing.T) {
 	assert.Equal(t, []string{"7", "8"}, vs)
 
 	// test with feature branch
-	require.NoError(t, os.WriteFile(filepath.Join(td, ".git", "HEAD"), []byte("ref: refs/heads/feat/test"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(td, ".git", "HEAD"), []byte("ref: refs/heads/feat/test"), 0o644))
 	cfg, err = LoadConfigWithWorkdir(fn, td)
 	require.NoError(t, err)
 	vs, ok = cfg.GetAll("core.int")
@@ -92,7 +92,7 @@ func TestConditionalIncludeGitDirI(t *testing.T) {
 
 	td := t.TempDir()
 	tdSub := filepath.Join(td, "SUB")
-	require.NoError(t, os.Mkdir(tdSub, 0755))
+	require.NoError(t, os.Mkdir(tdSub, 0o755))
 
 	// base config
 	fn := filepath.Join(td, "config")
