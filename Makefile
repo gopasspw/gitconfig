@@ -27,4 +27,10 @@ codequality:
 
 	@printf '%s\n' '$(OK)'
 
+test:
+	@echo ">> TEST"
+
+	@echo -n "     UNIT TESTS "
+	@$(GO) test -v
+
 .PHONY: clean build crosscompile test codequality
