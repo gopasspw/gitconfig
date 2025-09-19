@@ -1,6 +1,20 @@
 package gitconfig
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/gobwas/glob"
+)
+
+// globMatch implements a glob matcher that supports double-asterisk (**) patterns.
+func globMatch(pattern, s string) (bool, error) {
+	g, err := glob.Compile(pattern, '/')
+	if err != nil {
+		return false, err
+	}
+
+	return g.Match(s), nil
+}
 
 // splitKey splits a fully qualified gitconfig key into two or three parts.
 // A valid key consists of either a section and a key separated by a dot

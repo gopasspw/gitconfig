@@ -584,13 +584,12 @@ func matchSubSection(subsec, workdir string, c *Config) bool {
 			return false
 		}
 
-		match, err := filepath.Match(branchPattern, c.branch)
+		match, err := globMatch(branchPattern, c.branch)
 		if err != nil {
 			debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
 
 			return false
 		}
-		// TODO(GH-109): support double wildcard patterns
 		if match {
 			return true
 		}
