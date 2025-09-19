@@ -35,6 +35,7 @@ type Config struct {
 	noWrites bool // do not persist changes to disk (e.g. for tests)
 	raw      strings.Builder
 	vars     map[string][]string
+	branch   string
 }
 
 // IsEmpty returns true if the config is empty (typically a newly initialized config, but still unused).
@@ -463,7 +464,37 @@ func LoadConfig(fn string) (*Config, error) {
 // LoadConfigWithWorkdir tries to load a gitconfig from the given path and
 // a workdir. The workdir is used to resolve relative paths in the config.
 func LoadConfigWithWorkdir(fn, workdir string) (*Config, error) {
-	return loadConfigs(fn, workdir)
+	c, err := loadConfigs(fn, workdir)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func readGitBranch(workdir string) string {
+	if workdir == "" {
+		return ""
+	}
+	gitDir := filepath.Join(workdir, ".git")
+	// check if .git is a directory
+	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
+		// it might be a file with gitdir: path, not handled for now
+		return ""
+	}
+
+	headFile := filepath.Join(gitDir, "HEAD")
+	content, err := os.ReadFile(headFile)
+	if err != nil {
+		return ""
+	}
+
+	// content is like "ref: refs/heads/main"
+	if branch, found := strings.CutPrefix(string(content), "ref: refs/heads/"); found {
+		return strings.TrimSpace(branch)
+	}
+
+	return "" // detached HEAD or other cases
 }
 
 func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
@@ -480,6 +511,7 @@ func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
 func getConditionalIncludes(c *Config, workdir string) []string {
 	candidates := []string{}
 	for k := range c.vars {
+		debug.V(3).Log("found config key: %q", k)
 		// must have the form includeIf.<condition>.path
 		// e.g. includeIf."gitdir:/path/to/group/".path
 		// see https://git-scm.com/docs/git-config#_conditional_includes
@@ -490,7 +522,7 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 	}
 
 	out := make([]string, 0, len(candidates))
-	for _, k := range filterCandidates(candidates, workdir) {
+	for _, k := range filterCandidates(candidates, workdir, c) {
 		path, found := c.GetAll(k)
 		if !found {
 			debug.V(3).Log("skipping include candidate %q, no path found", k)
@@ -506,7 +538,7 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 // filterCandidates filters the candidates for include paths.
 // Currently only the gitdir condition is supported.
 // Others might be added in the future.
-func filterCandidates(candidates []string, workdir string) []string {
+func filterCandidates(candidates []string, workdir string, c *Config) []string {
 	out := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		sec, subsec, key := splitKey(candidate)
@@ -516,34 +548,67 @@ func filterCandidates(candidates []string, workdir string) []string {
 			continue
 		}
 
-		// We only support gitdir: for now.
-		if !strings.HasPrefix(subsec, "gitdir:") {
-			debug.V(3).Log("skipping unsupported include candidate %q", candidate)
-
-			continue
+		if matchSubSection(subsec, workdir, c) {
+			out = append(out, candidate)
 		}
-
-		p := strings.Split(subsec, ":")
-		// We have checked that there is a colon above.
-		dir := p[1]
-
-		// Either it is a full match or a prefix match.
-		if strings.TrimSuffix(workdir, "/") != strings.TrimSuffix(dir, "/") && !prefixMatch(dir, workdir) {
-			debug.V(3).Log("skipping include candidate %q, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", candidate, workdir, dir, dir, workdir)
-
-			continue
-		}
-
-		// We have a match, so we can add the path to the list.
-		out = append(out, candidate)
 	}
 
 	return out
 }
 
-func prefixMatch(path, prefix string) bool {
+func matchSubSection(subsec, workdir string, c *Config) bool {
+	if strings.HasPrefix(subsec, "gitdir") {
+		caseInsensitive := strings.Contains(subsec, "/i:")
+		p := strings.SplitN(subsec, ":", 2)
+		dir := p[1]
+
+		var exactMatch bool
+		if caseInsensitive {
+			exactMatch = strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/"))
+		} else {
+			exactMatch = strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/")
+		}
+
+		if exactMatch || prefixMatch(dir, workdir, caseInsensitive) {
+			return true
+		}
+		debug.V(3).Log("skipping include candidate, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", subsec, workdir, dir, dir, workdir)
+
+		return false
+	}
+
+	if strings.HasPrefix(subsec, "onbranch:") {
+		p := strings.SplitN(subsec, ":", 2)
+		branchPattern := p[1]
+		if c.branch == "" {
+			return false
+		}
+
+		match, err := filepath.Match(branchPattern, c.branch)
+		if err != nil {
+			debug.V(1).Log("invalid glob pattern in onbranch: %s", err)
+
+			return false
+		}
+		// TODO(GH-109): support double wildcard patterns
+		if match {
+			return true
+		}
+
+		return false
+	}
+
+	debug.V(3).Log("skipping unsupported include candidate %q", subsec)
+
+	return false
+}
+
+func prefixMatch(path, prefix string, fold bool) bool {
 	if !strings.HasSuffix(prefix, "/") {
 		return false
+	}
+	if fold {
+		return strings.HasPrefix(strings.ToLower(path), strings.ToLower(prefix))
 	}
 
 	return strings.HasPrefix(path, prefix)
@@ -555,6 +620,7 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 		return nil, err
 	}
 	c.path = fn
+	c.branch = readGitBranch(workdir)
 
 	loadedConfigs := map[string]struct{}{
 		fn: {},
@@ -583,6 +649,7 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 			continue
 		}
 
+		debug.V(2).Log("loading nested config %q", head)
 		nc, err := loadConfig(head)
 		if err != nil {
 			return nil, err

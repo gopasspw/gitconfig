@@ -30,6 +30,89 @@ func TestInsertOnce(t *testing.T) {
 `, c.raw.String())
 }
 
+func TestConditionalIncludeOnBranch(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping test on windows")
+	}
+
+	td := t.TempDir()
+
+	// base config
+	fn := filepath.Join(td, "config")
+	require.NoError(t, os.WriteFile(fn, []byte(`[core]
+	int = 7
+  [includeIf "onbranch:main"]
+	path = main.config
+  [includeIf "onbranch:feat/*"]
+    path = feat.config`), 0o600))
+
+	// main.config, should be included on main branch
+	fnMain := filepath.Join(td, "main.config")
+	require.NoError(t, os.WriteFile(fnMain, []byte(`[core]
+	int = 8`), 0o600))
+
+	// feat.config, should be included on feature branches
+	fnFeat := filepath.Join(td, "feat.config")
+	require.NoError(t, os.WriteFile(fnFeat, []byte(`[core]
+	int = 9`), 0o600))
+
+	// test with no branch set
+	cfg, err := LoadConfig(fn)
+	require.NoError(t, err)
+	vs, ok := cfg.GetAll("core.int")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"7"}, vs)
+
+	// test with main branch
+	require.NoError(t, os.MkdirAll(filepath.Join(td, ".git"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(td, ".git", "HEAD"), []byte("ref: refs/heads/main"), 0o644))
+	cfg, err = LoadConfigWithWorkdir(fn, td)
+	require.NoError(t, err)
+	vs, ok = cfg.GetAll("core.int")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"7", "8"}, vs)
+
+	// test with feature branch
+	require.NoError(t, os.WriteFile(filepath.Join(td, ".git", "HEAD"), []byte("ref: refs/heads/feat/test"), 0o644))
+	cfg, err = LoadConfigWithWorkdir(fn, td)
+	require.NoError(t, err)
+	vs, ok = cfg.GetAll("core.int")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"7", "9"}, vs)
+}
+
+func TestConditionalIncludeGitDirI(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping test on windows")
+	}
+
+	td := t.TempDir()
+	tdSub := filepath.Join(td, "SUB")
+	require.NoError(t, os.Mkdir(tdSub, 0o755))
+
+	// base config
+	fn := filepath.Join(td, "config")
+	require.NoError(t, os.WriteFile(fn, []byte(fmt.Sprintf(`[core]
+	int = 7
+  [includeIf "gitdir/i:%s/"]
+    path = sub.config`, strings.ToUpper(tdSub))), 0o600))
+
+	// sub.config, should be included
+	fnSub := filepath.Join(td, "sub.config")
+	require.NoError(t, os.WriteFile(fnSub, []byte(`[core]
+	int = 9`), 0o600))
+
+	cfg, err := LoadConfigWithWorkdir(fn, tdSub)
+	require.NoError(t, err)
+	vs, ok := cfg.GetAll("core.int")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"7", "9"}, vs)
+}
+
 func TestInsertMultipleSameKey(t *testing.T) {
 	t.Parallel()
 
