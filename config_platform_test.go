@@ -55,7 +55,7 @@ func TestPlatformPathSeparators(t *testing.T) {
 	require.NoError(t, err)
 
 	// Main config with platform-appropriate path
-	content := "[include]\n\tpath = " + includePath + "\n[user]\n\tname = Test"
+	content := "[include]\n\tpath = " + filepath.ToSlash(includePath) + "\n[user]\n\tname = Test"
 	err = os.WriteFile(configPath, []byte(content), 0o644)
 	require.NoError(t, err)
 

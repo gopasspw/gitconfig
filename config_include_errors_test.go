@@ -155,7 +155,7 @@ func TestIncludeAbsolutePath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Main config with absolute path include
-	content := "[include]\n\tpath = " + includePath + "\n[user]\n\tname = Test"
+	content := "[include]\n\tpath = " + filepath.ToSlash(includePath) + "\n[user]\n\tname = Test"
 	err = os.WriteFile(configPath, []byte(content), 0o644)
 	require.NoError(t, err)
 
@@ -192,7 +192,7 @@ func TestIncludeMultipleFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Main config including multiple files
-	content := "[include]\n\tpath = " + include1 + "\n[include]\n\tpath = " + include2 + "\n[user]\n\tname = Test"
+	content := "[include]\n\tpath = " + filepath.ToSlash(include1) + "\n[include]\n\tpath = " + filepath.ToSlash(include2) + "\n[user]\n\tname = Test"
 	err = os.WriteFile(configPath, []byte(content), 0o644)
 	require.NoError(t, err)
 
@@ -232,7 +232,7 @@ func TestIncludeOverride(t *testing.T) {
 	require.NoError(t, err)
 
 	// Main config includes files in order
-	content := "[include]\n\tpath = " + include1 + "\n[include]\n\tpath = " + include2
+	content := "[include]\n\tpath = " + filepath.ToSlash(include1) + "\n[include]\n\tpath = " + filepath.ToSlash(include2)
 	err = os.WriteFile(configPath, []byte(content), 0o644)
 	require.NoError(t, err)
 
