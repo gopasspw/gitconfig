@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package main
 
 import (
@@ -13,8 +16,9 @@ import (
 //
 // This example demonstrates how gitconfig handles include directives.
 // Git config supports including other config files:
-//   [include]
-//       path = /path/to/other/config
+//
+//	[include]
+//	    path = /path/to/other/config
 //
 // This enables modular configuration and code reuse.
 func main() {

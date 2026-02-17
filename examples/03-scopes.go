@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package main
 
 import (
@@ -13,12 +16,12 @@ import (
 //
 // This example demonstrates the configuration scope hierarchy.
 // Git config has multiple scopes with a clear precedence order:
-//   1. Environment variables (highest priority)
-//   2. Per-worktree config
-//   3. Per-repository config (local)
-//   4. Per-user config (global)
-//   5. System-wide config
-//   6. Presets (built-in defaults, lowest priority)
+//  1. Environment variables (highest priority)
+//  2. Per-worktree config
+//  3. Per-repository config (local)
+//  4. Per-user config (global)
+//  5. System-wide config
+//  6. Presets (built-in defaults, lowest priority)
 //
 // When you call Get(), the library searches through scopes in order
 // and returns the first value it finds.
