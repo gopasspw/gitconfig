@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTrim(t *testing.T) {
@@ -104,7 +105,7 @@ func TestGlobMatch(t *testing.T) {
 			if tc.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.want, got)
 			}
 		})

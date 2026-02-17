@@ -34,7 +34,7 @@ func main() {
 	defer os.RemoveAll(tmpDir)
 
 	gitDir := filepath.Join(tmpDir, ".git")
-	os.MkdirAll(gitDir, 0755)
+	os.MkdirAll(gitDir, 0o755)
 
 	fmt.Println("=== Example 3: Understanding Scopes ===\n")
 
@@ -49,7 +49,7 @@ func main() {
 	email = system@example.com
 [core]
 	pager = less
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func main() {
 	email = global@example.com
 [core]
 	editor = emacs
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func main() {
 	name = Local User
 [core]
 	autocrlf = true
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}

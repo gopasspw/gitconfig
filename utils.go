@@ -21,9 +21,9 @@ import (
 //	globMatch("feat/**", "feat/foo/bar") // returns (true, nil)
 //
 // Returns:
-// - (true, nil) if the string matches the pattern
-// - (false, nil) if the string does not match
-// - (false, error) if the pattern is invalid
+// - (true, nil) if the string matches the pattern.
+// - (false, nil) if the string does not match.
+// - (false, error) if the pattern is invalid.
 func globMatch(pattern, s string) (bool, error) {
 	g, err := glob.Compile(pattern, '/')
 	if err != nil {

@@ -38,7 +38,7 @@ func main() {
 [features]
     logging = true
     debug = false
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func main() {
 	err = os.WriteFile(configA, []byte(`[database]
     host = localhost
     port = 5432
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func main() {
     password = secret
 [cache]
     enabled = true
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}

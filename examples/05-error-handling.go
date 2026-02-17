@@ -36,21 +36,21 @@ func main() {
 	defer os.RemoveAll(tmpDir)
 
 	restrictedPath := filepath.Join(tmpDir, "restricted-config")
-	os.WriteFile(restrictedPath, []byte("[user]\n    name = Test"), 0644)
-	os.Chmod(restrictedPath, 0000) // Remove all permissions
+	os.WriteFile(restrictedPath, []byte("[user]\n    name = Test"), 0o644)
+	os.Chmod(restrictedPath, 0o000) // Remove all permissions
 
 	cfg, err = gitconfig.NewConfig(restrictedPath)
 	if err != nil {
 		fmt.Printf("  Expected error: %v\n", err)
 	}
-	os.Chmod(restrictedPath, 0644) // Restore permissions for cleanup
+	os.Chmod(restrictedPath, 0o644) // Restore permissions for cleanup
 
 	// Error 3: Parse error
 	fmt.Println("\nError 3: Parse error (invalid config syntax)")
 	badConfigPath := filepath.Join(tmpDir, "bad-config")
 	os.WriteFile(badConfigPath, []byte(`[user
     name = John
-`), 0644) // Missing closing bracket
+`), 0o644) // Missing closing bracket
 
 	cfg, err = gitconfig.NewConfig(badConfigPath)
 	if err != nil {
@@ -60,18 +60,18 @@ func main() {
 	// Error 4: Write error (permission denied)
 	fmt.Println("\nError 4: Write error (permission denied)")
 	writePath := filepath.Join(tmpDir, "write-test")
-	os.WriteFile(writePath, []byte("[user]\n    name = Test"), 0644)
+	os.WriteFile(writePath, []byte("[user]\n    name = Test"), 0o644)
 
 	cfg, err = gitconfig.NewConfig(writePath)
 	if err == nil {
 		cfg.Set("user.email", "test@example.com")
 
-		os.Chmod(tmpDir, 0000) // Remove write permissions
+		os.Chmod(tmpDir, 0o000) // Remove write permissions
 		err = cfg.Write()
 		if err != nil {
 			fmt.Printf("  Expected write error: %v\n", err)
 		}
-		os.Chmod(tmpDir, 0755) // Restore permissions
+		os.Chmod(tmpDir, 0o755) // Restore permissions
 	}
 
 	// Error 5: Graceful error handling pattern
@@ -82,7 +82,7 @@ func main() {
     email = john@example.com
 [core]
     editor = vim
-`), 0644)
+`), 0o644)
 
 	// Pattern: Load with error checking
 	cfg, err = gitconfig.NewConfig(goodConfigPath)

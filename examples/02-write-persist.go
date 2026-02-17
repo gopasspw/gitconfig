@@ -29,7 +29,7 @@ func main() {
 	defer os.RemoveAll(tmpDir)
 
 	configPath := filepath.Join(tmpDir, ".git", "config")
-	os.MkdirAll(filepath.Dir(configPath), 0755)
+	os.MkdirAll(filepath.Dir(configPath), 0o755)
 
 	// Write initial config
 	initialConfig := `[user]
@@ -37,7 +37,7 @@ func main() {
 [core]
     editor = vim
 `
-	err = os.WriteFile(configPath, []byte(initialConfig), 0644)
+	err = os.WriteFile(configPath, []byte(initialConfig), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}

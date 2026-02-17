@@ -28,7 +28,7 @@ func main() {
 	defer os.RemoveAll(tmpDir)
 
 	configPath := filepath.Join(tmpDir, ".git", "config")
-	os.MkdirAll(filepath.Dir(configPath), 0755)
+	os.MkdirAll(filepath.Dir(configPath), 0o755)
 
 	// Write a sample config file
 	sampleConfig := `[user]
@@ -41,7 +41,7 @@ func main() {
     remote = origin
     merge = refs/heads/main
 `
-	err = os.WriteFile(configPath, []byte(sampleConfig), 0644)
+	err = os.WriteFile(configPath, []byte(sampleConfig), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -127,14 +127,14 @@ func TestEdgeCaseEmptyValues(t *testing.T) {
 	// Empty values should return empty string
 	val, ok := cfg.Get("section.empty")
 	assert.True(t, ok)
-	assert.Equal(t, "", val)
+	assert.Empty(t, val)
 
 	val, ok = cfg.Get("section.noSpace")
 	assert.True(t, ok)
-	assert.Equal(t, "", val)
+	assert.Empty(t, val)
 
-	val, ok = cfg.Get("section.quoted")
-	// Quoted empty string should be ""
+	_, ok = cfg.Get("section.quoted")
+	// Quoted empty string should be present
 	assert.True(t, ok)
 }
 

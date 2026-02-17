@@ -43,7 +43,7 @@ func main() {
     autocrlf = input
 [init]
     defaultBranch = main
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func main() {
     email = team@project.com
 [feature]
     enabled = true
-`), 0644)
+`), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func main() {
     signingkey = ~/.ssh/id_ed25519.pub
 [commit]
     gpgsign = true
-`, commonPath, projectPath)), 0644)
+`, commonPath, projectPath)), 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -30,7 +30,7 @@ func TestIncludeFileNotFound(t *testing.T) {
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
 		// Acceptable to error on missing include
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	} else if cfg != nil {
 		// Or may skip the include silently - check behavior is consistent
 		assert.NotNil(t, cfg)
