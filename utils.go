@@ -6,7 +6,24 @@ import (
 	"github.com/gobwas/glob"
 )
 
-// globMatch implements a glob matcher that supports double-asterisk (**) patterns.
+// globMatch matches a string against a glob pattern.
+// It uses the gobwas/glob package and supports:
+// - single-asterisk (*) patterns for matching within a path component
+// - double-asterisk (**) patterns for matching across path components
+// - question mark (?) for single character matching
+// - character classes [abc] and ranges [a-z]
+//
+// The pattern uses '/' as a path separator.
+//
+// Example:
+//
+//	globMatch("feat/*", "feat/test") // returns (true, nil)
+//	globMatch("feat/**", "feat/foo/bar") // returns (true, nil)
+//
+// Returns:
+// - (true, nil) if the string matches the pattern.
+// - (false, nil) if the string does not match.
+// - (false, error) if the pattern is invalid.
 func globMatch(pattern, s string) (bool, error) {
 	g, err := glob.Compile(pattern, '/')
 	if err != nil {
@@ -42,6 +59,21 @@ func splitKey(key string) (section, subsection, skey string) { //nolint:nonamedr
 	return
 }
 
+// canonicalizeKey normalizes a gitconfig key according to git rules.
+//
+// Canonicalization rules (per git-config):
+// - Section names are converted to lowercase
+// - Subsection names are kept as-is (case-sensitive per git spec)
+// - Key names are converted to lowercase
+//
+// Returns an empty string if the key is invalid (missing section or key part).
+//
+// Examples:
+//
+//	canonicalizeKey("Core.Push") returns "core.push"
+//	canonicalizeKey("remote.Origin.URL") returns "remote.Origin.url"
+//	canonicalizeKey("valid.key") returns "valid.key"
+//	canonicalizeKey("invalid") returns "" // missing key part
 func canonicalizeKey(key string) string {
 	if key == "" {
 		// invalid key, return empty string
@@ -67,6 +99,10 @@ func canonicalizeKey(key string) string {
 	return section + "." + subsection + "." + skey
 }
 
+// trim removes leading and trailing whitespace from all strings in the slice.
+// It modifies the slice in-place.
+//
+// This is a convenience function for cleaning up parsed lines.
 func trim(s []string) {
 	for i, e := range s {
 		s[i] = strings.TrimSpace(e)
@@ -74,11 +110,21 @@ func trim(s []string) {
 }
 
 // parseLineForComment separates a line into content and comment parts.
-// It finds the first unquoted comment character (# or ;) to split the line.
-// It trims whitespace from the content part and removes matching surrounding
-// double ("") quotes from it.
-// The returned comment string does NOT include the delimiter character itself
-// and is also trimmed of leading/trailing whitespace.
+//
+// Parsing rules:
+// - Searches for the first unquoted comment character (# or ;)
+// - Ignores comment characters inside double-quoted strings
+// - Trims whitespace from both content and comment
+// - Removes surrounding double quotes from content
+//
+// The returned comment string does NOT include the delimiter character itself.
+//
+// Examples:
+//
+//	parseLineForComment(`value # comment`) returns ("value", "comment")
+//	parseLineForComment(`"content # not-comment" # comment`) returns ("content # not-comment", "comment")
+//	parseLineForComment(`plain-value`) returns ("plain-value", "")
+//	parseLineForComment(`"quoted value"`) returns ("quoted value", "")
 func parseLineForComment(line string) (string, string) {
 	line = strings.TrimSpace(line) // Trim whitespace from the line first
 	if !strings.HasPrefix(line, `"`) {

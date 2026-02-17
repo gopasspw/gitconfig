@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTrim(t *testing.T) {
@@ -17,6 +18,97 @@ func TestTrim(t *testing.T) {
 		for _, e := range tc {
 			assert.Equal(t, strings.TrimSpace(e), e)
 		}
+	}
+}
+
+func TestGlobMatch(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name    string
+		pattern string
+		input   string
+		want    bool
+		wantErr bool
+	}{
+		{
+			name:    "single asterisk matches within component",
+			pattern: "feat/*",
+			input:   "feat/test",
+			want:    true,
+		},
+		{
+			name:    "double asterisk matches across components",
+			pattern: "feat/**",
+			input:   "feat/foo/bar/baz",
+			want:    true,
+		},
+		{
+			name:    "single asterisk no match",
+			pattern: "feat/*",
+			input:   "feat/foo/bar",
+			want:    false,
+		},
+		{
+			name:    "question mark matches single character",
+			pattern: "?.js",
+			input:   "a.js",
+			want:    true,
+		},
+		{
+			name:    "question mark multiple",
+			pattern: "test_?_?.go",
+			input:   "test_a_b.go",
+			want:    true,
+		},
+		{
+			name:    "character class matching",
+			pattern: "[ab].txt",
+			input:   "a.txt",
+			want:    true,
+		},
+		{
+			name:    "character range",
+			pattern: "[a-z]*.txt",
+			input:   "names.txt",
+			want:    true,
+		},
+		{
+			name:    "no match",
+			pattern: "*.md",
+			input:   "file.go",
+			want:    false,
+		},
+		{
+			name:    "exact match",
+			pattern: "exact.txt",
+			input:   "exact.txt",
+			want:    true,
+		},
+		{
+			name:    "invalid pattern - bad range",
+			pattern: "[z-a].txt",
+			input:   "a.txt",
+			wantErr: true,
+		},
+		{
+			name:    "invalid pattern - bad bracket",
+			pattern: "[.txt",
+			input:   "a.txt",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := globMatch(tc.pattern, tc.input)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, got)
+			}
+		})
 	}
 }
 

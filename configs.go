@@ -12,9 +12,34 @@ import (
 	"github.com/gopasspw/gopass/pkg/set"
 )
 
-// Configs is a container for a config "view" that is composed of several different
-// config objects. The intention is for the ones with a wider scope to provide defaults
-// so those with a more narrow scope then only have to override what they are interested in.
+// Configs represents all git configuration files for a repository.
+//
+// Configs manages multiple Config objects from different scopes with a unified
+// interface. It handles loading and merging configurations from multiple sourc with priority.
+//
+// Scope Priority (highest to lowest):
+// 1. Environment variables (GIT_CONFIG_*)
+// 2. Worktree-specific config (.git/config.worktree)
+// 3. Local/repository config (.git/config)
+// 4. Global/user config (~/.gitconfig)
+// 5. System config (/etc/gitconfig)
+// 6. Preset/built-in defaults
+//
+// Fields:
+// - Preset: Built-in default configuration (optional)
+// - system, global, local, worktree, env: Config objects for each scope
+// - workdir: Working directory (used to locate local and worktree configs)
+// - Name: Configuration set name (e.g., "git" or "gopass")
+// - SystemConfig, GlobalConfig, LocalConfig, WorktreeConfig: File paths
+// - EnvPrefix: Prefix for environment variables (e.g., "GIT_CONFIG")
+// - NoWrites: If true, prevents all writes to disk
+//
+// Usage:
+//
+//	cfg := New()
+//	cfg.LoadAll(".")  // Load from current directory
+//	value := cfg.Get("core.editor")  // Reads from all scopes
+//	cfg.SetLocal("core.pager", "less")  // Write to local only
 type Configs struct {
 	Preset   *Config
 	system   *Config
@@ -33,6 +58,25 @@ type Configs struct {
 	NoWrites       bool
 }
 
+// New creates a new Configs instance with default configuration.
+//
+// The returned instance is not yet loaded. Call LoadAll() to load configurations.
+//
+// Default settings:
+// - Name: "git"
+// - SystemConfig: "/etc/gitconfig" (Unix) or auto-detected (Windows)
+// - GlobalConfig: "~/.gitconfig"
+// - LocalConfig: "config" (relative to workdir)
+// - WorktreeConfig: "config.worktree" (relative to workdir)
+// - EnvPrefix: "GIT_CONFIG"
+// - NoWrites: false (allows persisting changes)
+//
+// These settings can be customized before calling LoadAll():
+//
+//	cfg := New()
+//	cfg.SystemConfig = "/etc/myapp/config"
+//	cfg.EnvPrefix = "MYAPP_CONFIG"
+//	cfg.LoadAll(".")
 func New() *Configs {
 	return &Configs{
 		system: &Config{
@@ -56,19 +100,37 @@ func New() *Configs {
 	}
 }
 
-// Reload will reload the config(s) from disk.
+// Reload reloads all configuration files from disk.
+//
+// This is useful when configuration files have been modified externally.
+// Uses the same workdir that was provided to the last LoadAll call.
 func (cs *Configs) Reload() {
 	cs.LoadAll(cs.workdir)
 }
 
-// String implements fmt.Stringer.
+// String implements fmt.Stringer for debugging.
 func (cs *Configs) String() string {
 	return fmt.Sprintf("GitConfigs{Name: %s - Workdir: %s - Env: %s - System: %s - Global: %s - Local: %s - Worktree: %s}", cs.Name, cs.workdir, cs.EnvPrefix, cs.SystemConfig, cs.GlobalConfig, cs.LocalConfig, cs.WorktreeConfig)
 }
 
-// LoadAll tries to load all known config files. Missing or invalid files are
-// silently ignored. It never fails. The workdir is optional. If non-empty
-// this method will try to load a local config from this location.
+// LoadAll loads all known configuration files from their configured locations.
+//
+// Behavior:
+// - Loads configs from all scopes (system, global, local, worktree, env)
+// - Missing or invalid files are silently ignored
+// - Never returns an error (always returns &cs for chaining)
+// - workdir is optional; if empty, local and worktree configs are not loaded
+// - Processes include and includeIf directives
+// - Merges all configs with proper scope priority
+//
+// Parameters:
+// - workdir: Working directory (usually repo root) to locate local/worktree configs
+//
+// Example:
+//
+//	cfg := New()
+//	cfg.LoadAll("/path/to/repo")
+//	// Now ready to use Get, Set, etc.
 func (cs *Configs) LoadAll(workdir string) *Configs {
 	cs.workdir = workdir
 
@@ -130,6 +192,10 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	return cs
 }
 
+// globalConfigFile returns the path to the global (per-user) config file using XDG base directory spec.
+//
+// The defaultlocation is $XDG_CONFIG_HOME/<name>/config (typically ~/.config/git/config for Git).
+// This follows the XDG Base Directory specification for user-specific configuration files.
 func globalConfigFile(name string) string {
 	// $XDG_CONFIG_HOME/git/config
 	return filepath.Join(appdir.New(name).UserConfig(), "config")
@@ -194,12 +260,33 @@ func (cs *Configs) loadGlobalConfigs() string {
 }
 
 // HasGlobalConfig indicates if a per-user config can be found.
+//
+// Returns true if a global config file exists at one of the configured locations.
 func (cs *Configs) HasGlobalConfig() bool {
 	return cs.loadGlobalConfigs() != ""
 }
 
-// Get returns the value for the given key from the first location that is found.
-// Lookup order: env, worktree, local, global, system and presets.
+// Get returns the value for the given key from the first scope that contains it.
+//
+// Lookup Order (by scope priority):
+// 1. Environment variables (GIT_CONFIG_*)
+// 2. Worktree config (.git/config.worktree)
+// 3. Local config (.git/config)
+// 4. Global config (~/.gitconfig)
+// 5. System config (/etc/gitconfig)
+// 6. Preset/defaults
+//
+// The search stops at the first scope that has the key. Earlier scopes override later ones.
+//
+// Returns the value as a string. For keys with multiple values, returns the first one.
+// Returns empty string if key not found in any scope.
+//
+// Example:
+//
+//	editor := cfg.Get("core.editor")
+//	if editor != "" {
+//	  fmt.Printf("Using editor: %s\n", editor)
+//	}
 func (cs *Configs) Get(key string) string {
 	for _, cfg := range []*Config{
 		cs.env,
@@ -222,8 +309,12 @@ func (cs *Configs) Get(key string) string {
 	return ""
 }
 
-// GetAll returns all values for the given key from the first location that is found.
-// See the description of Get for more details.
+// GetAll returns all values for the given key from the first scope that contains it.
+//
+// Like Get but returns all values for keys that can have multiple entries.
+// See Get documentation for scope priority.
+//
+// Returns nil if key not found in any scope.
 func (cs *Configs) GetAll(key string) []string {
 	for _, cfg := range []*Config{
 		cs.env,
@@ -269,7 +360,16 @@ func (cs *Configs) GetFrom(key string, scope string) (string, bool) {
 	}
 }
 
-// GetGlobal specifically ask the per-user (global) config for a key.
+// GetGlobal specifically asks the per-user (global) config for a key.
+//
+// This bypasses the scope priority and only reads from the global config.
+// Useful when you specifically want settings from ~/.gitconfig.
+//
+// Returns empty string if the key is not found in the global config.
+//
+// Example:
+//
+//	name, _ := cfg.GetGlobal("user.name")
 func (cs *Configs) GetGlobal(key string) string {
 	if cs.global == nil {
 		return ""
@@ -285,6 +385,15 @@ func (cs *Configs) GetGlobal(key string) string {
 }
 
 // GetLocal specifically asks the per-directory (local) config for a key.
+//
+// This bypasses the scope priority and only reads from the local config (.git/config).
+// Useful when you specifically want settings from the repository's config.
+//
+// Returns empty string if the key is not found in the local config.
+//
+// Example:
+//
+//	url, _ := cfg.GetLocal("remote.origin.url")
 func (cs *Configs) GetLocal(key string) string {
 	if cs.local == nil {
 		return ""
@@ -319,13 +428,16 @@ func (cs *Configs) IsSet(key string) bool {
 
 // SetLocal sets (or adds) a key only in the per-directory (local) config.
 func (cs *Configs) SetLocal(key, value string) error {
+	if cs.workdir == "" {
+		return ErrWorkdirNotSet
+	}
 	if cs.local == nil {
-		if cs.workdir == "" {
-			return fmt.Errorf("no workdir set")
-		}
 		cs.local = &Config{
 			path: filepath.Join(cs.workdir, cs.LocalConfig),
 		}
+	}
+	if cs.local.path == "" {
+		cs.local.path = filepath.Join(cs.workdir, cs.LocalConfig)
 	}
 
 	return cs.local.Set(key, value)

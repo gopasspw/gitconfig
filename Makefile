@@ -1,4 +1,5 @@
 GO                        ?= GO111MODULE=on CGO_ENABLED=0 go
+CGO                       ?= GO111MODULE=on CGO_ENABLED=1 go
 GOFILES_NOVENDOR          := $(shell find . -name vendor -prune -o -type f -name '*.go' -not -name '*.pb.go' -print)
 OK := $(shell tput setaf 6; echo ' [OK]'; tput sgr0;)
 
@@ -33,6 +34,41 @@ test:
 
 	@echo -n "     UNIT TESTS "
 	@$(GO) test -v
+	@printf '%s\n' '$(OK)'
+
+test-short:
+	@echo ">> TEST (SHORT)"
+
+	@echo -n "     UNIT TESTS "
+	@$(GO) test -short -v
+	@printf '%s\n' '$(OK)'
+
+test-race:
+	@echo ">> TEST (RACE)"
+
+	@echo -n "     UNIT TESTS "
+	@$(CGO) test -race -v
+	@printf '%s\n' '$(OK)'
+
+bench:
+	@echo ">> BENCH"
+
+	@echo -n "     BENCHMARKS "
+	@$(GO) test -bench=. -benchmem ./...
+	@printf '%s\n' '$(OK)'
+
+coverage:
+	@echo ">> COVERAGE"
+
+	@echo -n "     TEST COVERAGE "
+	@$(GO) test -coverprofile=coverage.out ./...
+	@$(GO) tool cover -func=coverage.out | tail -1
+	@printf '%s\n' '$(OK)'
+	@$(GO) tool cover -html=coverage.out -o coverage.html
+	@which go-cover-treemap > /dev/null; if [ $$? -ne 0 ]; then \
+		$(GO) install github.com/nikolaydubina/go-cover-treemap@latest; \
+	fi
+	@go-cover-treemap -coverprofile coverage.out > coverage.svg
 
 fmt:
 	@keep-sorted --mode fix $(GOFILES_NOVENDOR)
@@ -40,4 +76,4 @@ fmt:
 	@$(GO) mod tidy
 
 
-.PHONY: clean build crosscompile test codequality
+.PHONY: clean build crosscompile test test-short test-race bench coverage codequality

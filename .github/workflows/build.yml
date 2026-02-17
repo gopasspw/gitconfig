@@ -65,8 +65,10 @@ jobs:
         echo ${GOROOT}
         env  
 
-    - name: Build and Unit Test
-      run: go test ./...
+    - name: Unit Test with Coverage
+      run: |
+        go test -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out | tail -1
 
   windows:
     runs-on: windows-latest

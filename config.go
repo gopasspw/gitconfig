@@ -27,8 +27,28 @@ var (
 	CompatMode bool
 )
 
-// Config is a single parsed config file. It contains a reference of the input file, if any.
-// It can only be populated only by reading the environment variables.
+// Config represents a single git configuration file from one scope.
+//
+// Config handles reading and writing a single configuration file while attempting
+// to preserve the original formatting (comments, whitespace, section order).
+//
+// Fields:
+// - path: File path of this config file
+// - readonly: If true, prevents any modifications (even in-memory)
+// - noWrites: If true, prevents persisting changes to disk (useful for testing)
+// - raw: Maintains the raw text representation for round-trip fidelity
+// - vars: Map of normalized keys to their values (may be multiple values per key)
+// - branch: Current git branch name (for onbranch conditionals)
+//
+// Note: Config is not thread-safe. Concurrent access from multiple goroutines
+// is not supported. Callers must provide synchronization if needed.
+//
+// Typical Usage:
+//
+//	cfg, err := LoadConfig("~/.gitconfig")
+//	if err != nil { ... }
+//	value, ok := cfg.Get("core.editor")
+//	if err := cfg.Set("core.pager", "less"); err != nil { ... }
 type Config struct {
 	path     string
 	readonly bool // do not allow modifying values (even in memory)
@@ -38,10 +58,14 @@ type Config struct {
 	branch   string
 }
 
-// IsEmpty returns true if the config is empty (typically a newly initialized config, but still unused).
-// Since gitconfig.New() already sets the global path to the globalConfigFile() one, we cannot rely on
-// the path being set to checki this. We need to check the  raw length to be sure it wasn't just
-// the default empty config struct.
+// IsEmpty returns true if the config is empty (no configuration loaded).
+//
+// An empty config is one that:
+// - Is nil
+// - Has no variables loaded
+// - Has no raw content (not just missing path reference)
+//
+// This is used to distinguish between "not yet loaded" and "loaded but empty file".
 func (c *Config) IsEmpty() bool {
 	if c == nil || c.vars == nil {
 		return true
@@ -54,10 +78,29 @@ func (c *Config) IsEmpty() bool {
 	return true
 }
 
-// Unset deletes a key.
+// Unset deletes a key from the config.
+//
+// Behavior:
+// - If the key exists, it's removed from vars and the raw config string
+// - If the key doesn't exist, this is a no-op (no error)
+// - The underlying config file is updated if possible
+// - Readonly configs silently ignore the unset operation
+//
+// Note: Currently does not remove entire sections, only individual keys within sections.
+//
+// Example:
+//
+//	if err := cfg.Unset("core.pager"); err != nil {
+//	  log.Fatal(err)
+//	}
 func (c *Config) Unset(key string) error {
 	if c.readonly {
 		return nil
+	}
+
+	section, _, subkey := splitKey(key)
+	if section == "" || subkey == "" {
+		return fmt.Errorf("%w: %s", ErrInvalidKey, key)
 	}
 
 	key = canonicalizeKey(key)
@@ -75,6 +118,21 @@ func (c *Config) Unset(key string) error {
 }
 
 // Get returns the first value of the key.
+//
+// For keys with multiple values, Get returns only the first one.
+// Use GetAll to retrieve all values for a key.
+//
+// The key is case-insensitive for sections and key names but case-sensitive
+// for subsection names (per git-config specification).
+//
+// Returns (value, true) if the key is found, ("", false) otherwise.
+//
+// Example:
+//
+//	v, ok := cfg.Get("core.editor")
+//	if ok {
+//	  fmt.Printf("Editor: %s\n", v)
+//	}
 func (c *Config) Get(key string) (string, bool) {
 	key = canonicalizeKey(key)
 	vs, found := c.vars[key]
@@ -86,6 +144,23 @@ func (c *Config) Get(key string) (string, bool) {
 }
 
 // GetAll returns all values of the key.
+//
+// Git config allows multiple values for the same key. This is common for:
+// - Multiple include paths
+// - Multiple aliases
+// - Arrays in custom configurations
+//
+// Returns (values, true) if the key is found, (nil, false) otherwise.
+// If found, values will be non-nil but may be empty.
+//
+// Example:
+//
+//	paths, ok := cfg.GetAll("include.path")
+//	if ok {
+//	  for _, path := range paths {
+//	    fmt.Printf("Include: %s\n", path)
+//	  }
+//	}
 func (c *Config) GetAll(key string) ([]string, bool) {
 	key = canonicalizeKey(key)
 	vs, found := c.vars[key]
@@ -97,6 +172,14 @@ func (c *Config) GetAll(key string) ([]string, bool) {
 }
 
 // IsSet returns true if the key was set in this config.
+//
+// Returns true even if the value is empty string (unlike checking Get with ok).
+//
+// Example:
+//
+//	if cfg.IsSet("core.editor") {
+//	  fmt.Println("Editor is configured")
+//	}
 func (c *Config) IsSet(key string) bool {
 	key = canonicalizeKey(key)
 	_, present := c.vars[key]
@@ -104,12 +187,30 @@ func (c *Config) IsSet(key string) bool {
 	return present
 }
 
-// Set updates or adds a key in the config. If possible it will also update the underlying
-// config file on disk.
+// Set updates or adds a key in the config.
+//
+// Behavior:
+// - If the key exists, the first value is updated
+// - If the key doesn't exist, it's added to an existing section or a new section
+// - If possible, the underlying config file is written to disk
+// - Original formatting (comments, whitespace) is preserved where possible
+//
+// Errors:
+// - Returns error if readonly or key is invalid (missing section or key name)
+// - Returns error if file write fails (but in-memory value may be set)
+//
+// This method normalizes the key (lowercase sections and key names) but preserves
+// subsect names' case.
+//
+// Example:
+//
+//	if err := cfg.Set("core.pager", "less"); err != nil {
+//	  log.Fatal(err)
+//	}
 func (c *Config) Set(key, value string) error {
 	section, _, subkey := splitKey(key)
 	if section == "" || subkey == "" {
-		return fmt.Errorf("invalid key: %s", key)
+		return fmt.Errorf("%w: %s", ErrInvalidKey, key)
 	}
 
 	// can't set env vars
@@ -226,6 +327,9 @@ func (c *Config) insertValue(key, value string) error {
 	return c.flushRaw()
 }
 
+// formatKeyValue formats a configuration key-value pair for writing to file.
+// If the value is empty or whitespace-only, only the key is written.
+// The comment parameter preserves any trailing comment from the original line.
 func formatKeyValue(key, value, comment string) string {
 	if strings.TrimSpace(value) == "" {
 		return fmt.Sprintf(keyTpl, key, comment)
@@ -234,6 +338,14 @@ func formatKeyValue(key, value, comment string) string {
 	return fmt.Sprintf(keyValueTpl, key, value, comment)
 }
 
+// parseSectionHeader extracts the section and subsection from a config file section header line.
+// For example:
+//
+//	"[core]" returns ("core", "", false)
+//	"[remote \"origin\"]" returns ("remote", "origin", false)
+//	"[]" returns ("", "", true) to indicate skip
+//
+// The skip return value indicates whether this line should be ignored.
 func parseSectionHeader(line string) (section, subsection string, skip bool) { //nolint:nonamedreturns
 	line = strings.Trim(line, "[]")
 	if line == "" {
@@ -277,13 +389,13 @@ func (c *Config) flushRaw() error {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
-		return fmt.Errorf("failed to create directory %q for %q: %w", filepath.Dir(c.path), c.path, err)
+		return fmt.Errorf("%w: %s: %w", ErrCreateConfigDir, filepath.Dir(c.path), err)
 	}
 
 	debug.V(3).Log("writing config to %s: \n--------------\n%s\n--------------", c.path, c.raw.String())
 
 	if err := os.WriteFile(c.path, []byte(c.raw.String()), 0o600); err != nil {
-		return fmt.Errorf("failed to write config to %s: %w", c.path, err)
+		return fmt.Errorf("%w: %s: %w", ErrWriteConfig, c.path, err)
 	}
 
 	debug.V(1).Log("wrote config to %s", c.path)
@@ -403,6 +515,9 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	return lines
 }
 
+// splitValueComment separates a config value from any trailing comment.
+// Handles three cases: no comment, unquoted value with comment, and quoted value with comment.
+// Returns the value (unquoted) and the comment portion (including # or ;).
 func splitValueComment(rValue string) (string, string) {
 	// Trivial case: no comment. Return early, do not alter anything.
 	if !strings.ContainsAny(rValue, "#;") {
@@ -426,13 +541,10 @@ func splitValueComment(rValue string) (string, string) {
 	return parseLineForComment(rValue)
 }
 
+// unescapeValue processes escape sequences in configuration values.
+// Supports: \\, \", \n (newline), \t (tab), \b (backspace).
+// Other escape sequences (including octal) are not supported per Git config spec.
 func unescapeValue(value string) string {
-	// The following escape sequences (beside \" and \\) are recognized:
-	// \n for newline character (NL),
-	// \t for horizontal tabulation (HT, TAB) and
-	// \b for backspace (BS).
-	// Other char escape sequences (including octal escape sequences) are invalid.
-
 	value = strings.ReplaceAll(value, `\\`, `\`)
 	value = strings.ReplaceAll(value, `\"`, `"`)
 	value = strings.ReplaceAll(value, `\n`, "\n")
@@ -497,6 +609,9 @@ func readGitBranch(workdir string) string {
 	return "" // detached HEAD or other cases
 }
 
+// getEffectiveIncludes returns all include paths from the config, combining
+// basic [include] directives with conditional [includeIf] directives.
+// The workdir parameter is used to evaluate conditional includes.
 func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
 	includePaths, includeExists := c.GetAll("include.path")
 
@@ -508,6 +623,11 @@ func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
 	return includePaths, includeExists
 }
 
+// getConditionalIncludes processes [includeIf "condition"] directives and returns
+// paths that match the current environment.
+// Supported conditions:
+//   - gitdir:<pattern> - Include if git directory matches pattern (case-sensitive)
+//   - gitdir/i:<pattern> - Include if git directory matches pattern (case-insensitive)
 func getConditionalIncludes(c *Config, workdir string) []string {
 	candidates := []string{}
 	for k := range c.vars {
@@ -556,6 +676,9 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 	return out
 }
 
+// matchSubSection determines if a subsection condition matches the current environment.
+// Handles gitdir, gitdir/i, onbranch, and other condition types.
+// Returns true if the condition matches and the config should be included.
 func matchSubSection(subsec, workdir string, c *Config) bool {
 	if strings.HasPrefix(subsec, "gitdir") {
 		caseInsensitive := strings.Contains(subsec, "/i:")
@@ -602,6 +725,9 @@ func matchSubSection(subsec, workdir string, c *Config) bool {
 	return false
 }
 
+// prefixMatch checks if a path matches a prefix pattern, with optional case-folding.
+// This is used for gitdir: and gitdir/i: conditional includes.
+// The fold parameter controls case-insensitive matching.
 func prefixMatch(path, prefix string, fold bool) bool {
 	if !strings.HasSuffix(prefix, "/") {
 		return false
@@ -613,6 +739,9 @@ func prefixMatch(path, prefix string, fold bool) bool {
 	return strings.HasPrefix(path, prefix)
 }
 
+// loadConfigs loads a config file and recursively processes all include directives.
+// This is the main entry point for loading configs with include support.
+// Returns the merged configuration from all included files.
 func loadConfigs(fn, workdir string) (*Config, error) {
 	c, err := loadConfig(fn)
 	if err != nil {
@@ -666,6 +795,8 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 	return c, nil
 }
 
+// loadConfig loads a single config file without processing includes.
+// This is used internally by loadConfigs to load individual files.
 func loadConfig(fn string) (*Config, error) {
 	fh, err := os.Open(fn)
 	if err != nil {
