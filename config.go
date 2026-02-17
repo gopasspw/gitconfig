@@ -510,6 +510,9 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	return lines
 }
 
+// splitValueComment separates a config value from any trailing comment.
+// Handles three cases: no comment, unquoted value with comment, and quoted value with comment.
+// Returns the value (unquoted) and the comment portion (including # or ;).
 func splitValueComment(rValue string) (string, string) {
 	// Trivial case: no comment. Return early, do not alter anything.
 	if !strings.ContainsAny(rValue, "#;") {
@@ -533,12 +536,10 @@ func splitValueComment(rValue string) (string, string) {
 	return parseLineForComment(rValue)
 }
 
+// unescapeValue processes escape sequences in configuration values.
+// Supports: \\, \", \n (newline), \t (tab), \b (backspace).
+// Other escape sequences (including octal) are not supported per Git config spec.
 func unescapeValue(value string) string {
-	// The following escape sequences (beside \" and \\) are recognized:
-	// \n for newline character (NL),
-	// \t for horizontal tabulation (HT, TAB) and
-	// \b for backspace (BS).
-	// Other char escape sequences (including octal escape sequences) are invalid.
 
 	value = strings.ReplaceAll(value, `\\`, `\`)
 	value = strings.ReplaceAll(value, `\"`, `"`)
@@ -604,6 +605,9 @@ func readGitBranch(workdir string) string {
 	return "" // detached HEAD or other cases
 }
 
+// getEffectiveIncludes returns all include paths from the config, combining
+// basic [include] directives with conditional [includeIf] directives.
+// The workdir parameter is used to evaluate conditional includes.
 func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
 	includePaths, includeExists := c.GetAll("include.path")
 
@@ -668,6 +672,9 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 	return out
 }
 
+// matchSubSection determines if a subsection condition matches the current environment.
+// Handles gitdir, gitdir/i, onbranch, and other condition types.
+// Returns true if the condition matches and the config should be included.
 func matchSubSection(subsec, workdir string, c *Config) bool {
 	if strings.HasPrefix(subsec, "gitdir") {
 		caseInsensitive := strings.Contains(subsec, "/i:")
@@ -728,6 +735,9 @@ func prefixMatch(path, prefix string, fold bool) bool {
 	return strings.HasPrefix(path, prefix)
 }
 
+// loadConfigs loads a config file and recursively processes all include directives.
+// This is the main entry point for loading configs with include support.
+// Returns the merged configuration from all included files.
 func loadConfigs(fn, workdir string) (*Config, error) {
 	c, err := loadConfig(fn)
 	if err != nil {
@@ -781,6 +791,8 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 	return c, nil
 }
 
+// loadConfig loads a single config file without processing includes.
+// This is used internally by loadConfigs to load individual files.
 func loadConfig(fn string) (*Config, error) {
 	fh, err := os.Open(fn)
 	if err != nil {
