@@ -149,7 +149,7 @@ When adding new functionality:
 
 Use conventional commit format:
 
-```
+```text
 type(scope): short description
 
 Longer explanation if needed. Wrap at 72 characters.

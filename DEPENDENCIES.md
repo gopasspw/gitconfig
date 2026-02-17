@@ -7,6 +7,7 @@ This document describes the external dependencies used by the gitconfig project.
 ### Production Dependencies
 
 #### gobwas/glob (v0.2.3)
+
 - **Purpose:** Glob pattern matching for conditional include resolution
 - **Used for:** Matching `onbranch:*` patterns in includeIf conditions
 - **Why needed:** Provides efficient glob matching with `**` support
@@ -14,6 +15,7 @@ This document describes the external dependencies used by the gitconfig project.
 - **Note:** Minimal dependency; could be replaced with stdlib if glob features not needed
 
 #### gopasspw/gopass (v1.16.1)
+
 - **Purpose:** Provides utility functions and package infrastructure
 - **Used for:** Debug logging, applicaton directory detection, set utilities
 - **Why needed:** Used by parent project; provides common utilities
@@ -23,6 +25,7 @@ This document describes the external dependencies used by the gitconfig project.
 ### Test Dependencies
 
 #### stretchr/testify (v1.11.1)
+
 - **Purpose:** Assertion and mocking library for tests
 - **Used for:** `assert` and `require` functions in test files
 - **Why needed:** Provides cleaner, more expressive test assertions
@@ -42,6 +45,7 @@ All indirect dependencies are test-related infrastructure:
 ## No CGo Dependency
 
 ⚠️ **Important:** This project explicitly does NOT use CGo. All dependencies are pure Go, which enables:
+
 - Cross-platform compilation (Windows, macOS, Linux)
 - No C/C++ compiler required
 - Static binary generation
