@@ -135,13 +135,15 @@ func TestConcurrentReadsSameKey(t *testing.T) {
 	goroutines := 20
 
 	for range goroutines {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			for range iterations {
 				name, ok := cfg.Get("user.name")
 				assert.True(t, ok)
 				assert.Equal(t, "Concurrent Test", name)
 			}
-		})
+		}()
 	}
 
 	wg.Wait()
@@ -171,13 +173,15 @@ func TestConcurrentGetAll(t *testing.T) {
 	goroutines := 10
 
 	for range goroutines {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			for range iterations {
 				values, ok := cfg.GetAll("remote.origin.fetch")
 				assert.True(t, ok)
 				assert.Len(t, values, 3)
 			}
-		})
+		}()
 	}
 
 	wg.Wait()
@@ -367,19 +371,23 @@ func TestConcurrentReadDuringLoad(t *testing.T) {
 
 	// Goroutines continuously reading from existing config
 	for range readGoroutines {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			end := time.Now().Add(duration)
 			for time.Now().Before(end) {
 				name, ok := cfg.Get("user.name")
 				assert.True(t, ok)
 				assert.Equal(t, "Load Test User", name)
 			}
-		})
+		}()
 	}
 
 	// Goroutines loading new config instances
 	for range loadGoroutines {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			end := time.Now().Add(duration)
 			for time.Now().Before(end) {
 				newCfg, err := LoadConfig(configPath)
@@ -390,7 +398,7 @@ func TestConcurrentReadDuringLoad(t *testing.T) {
 					assert.Equal(t, "Load Test User", name)
 				}
 			}
-		})
+		}()
 	}
 
 	wg.Wait()
@@ -420,13 +428,15 @@ func TestNoDataRacesInGet(t *testing.T) {
 	// Run with race detector enabled:  go test -race
 	var wg sync.WaitGroup
 	for range 50 {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			for range 100 {
 				_, _ = cfg.Get("user.name")
 				_, _ = cfg.Get("core.editor")
 				_, _ = cfg.Get("remote.origin.url")
 			}
-		})
+		}()
 	}
 
 	wg.Wait()
