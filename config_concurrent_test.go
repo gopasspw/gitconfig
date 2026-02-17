@@ -42,12 +42,12 @@ func TestConcurrentReads(t *testing.T) {
 	iterations := 100
 	goroutines := 10
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 
-			for i := 0; i < iterations; i++ {
+			for range iterations {
 				// Each goroutine reads different keys based on its ID
 				switch id % 3 {
 				case 0:
@@ -78,7 +78,7 @@ func TestConcurrentLoad(t *testing.T) {
 
 	// Create multiple config files
 	configs := make([]string, 5)
-	for i := 0; i < len(configs); i++ {
+	for i := range configs {
 		configPath := filepath.Join(td, "config"+string(rune('0'+i)))
 		content := "[user]\n\tname = User" + string(rune('0'+i))
 		err := os.WriteFile(configPath, []byte(content), 0o644)
@@ -91,7 +91,7 @@ func TestConcurrentLoad(t *testing.T) {
 	results := make([]*Config, len(configs))
 	errors := make([]error, len(configs))
 
-	for i := 0; i < len(configs); i++ {
+	for i := range configs {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
@@ -104,7 +104,7 @@ func TestConcurrentLoad(t *testing.T) {
 	wg.Wait()
 
 	// Verify all loads succeeded
-	for i := 0; i < len(configs); i++ {
+	for i := range configs {
 		require.NoError(t, errors[i], "config %d should load without error", i)
 		require.NotNil(t, results[i], "config %d should not be nil", i)
 
@@ -134,11 +134,11 @@ func TestConcurrentReadsSameKey(t *testing.T) {
 	iterations := 50
 	goroutines := 20
 
-	for g := 0; g < goroutines; g++ {
+	for range goroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for range iterations {
 				name, ok := cfg.Get("user.name")
 				assert.True(t, ok)
 				assert.Equal(t, "Concurrent Test", name)
@@ -172,14 +172,14 @@ func TestConcurrentGetAll(t *testing.T) {
 	iterations := 50
 	goroutines := 10
 
-	for g := 0; g < goroutines; g++ {
+	for range goroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for range iterations {
 				values, ok := cfg.GetAll("remote.origin.fetch")
 				assert.True(t, ok)
-				assert.Equal(t, 3, len(values))
+				assert.Len(t, values, 3)
 			}
 		}()
 	}
@@ -200,7 +200,7 @@ func TestSerialWrites(t *testing.T) {
 
 	// Load separate config instances for each write
 	configs := make([]*Config, 5)
-	for i := 0; i < len(configs); i++ {
+	for i := range configs {
 		cfg, err := LoadConfig(configPath)
 		require.NoError(t, err)
 		configs[i] = cfg
@@ -257,11 +257,11 @@ func TestConcurrentMultiScopeReads(t *testing.T) {
 	iterations := 50
 	goroutines := 10
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for range iterations {
 				switch id % 3 {
 				case 0:
 					// Read value that exists in local scope
@@ -292,7 +292,7 @@ func TestConcurrentConfigCreation(t *testing.T) {
 
 	results := make([]*Configs, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
@@ -303,7 +303,7 @@ func TestConcurrentConfigCreation(t *testing.T) {
 	wg.Wait()
 
 	// Verify all instances were created successfully
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		assert.NotNil(t, results[i], "config instance %d should not be nil", i)
 		assert.NotEmpty(t, results[i].LocalConfig)
 		assert.NotEmpty(t, results[i].WorktreeConfig)
@@ -312,29 +312,19 @@ func TestConcurrentConfigCreation(t *testing.T) {
 
 // TestConcurrentEnvConfigLoad tests loading environment configs concurrently.
 func TestConcurrentEnvConfigLoad(t *testing.T) {
-	t.Parallel()
-
 	// Set up test environment variables
 	testPrefix := "GITCONFIG_CONCURRENT"
-	os.Setenv(testPrefix+"_COUNT", "2")
-	os.Setenv(testPrefix+"_KEY_0", "user.name")
-	os.Setenv(testPrefix+"_VALUE_0", "Env User")
-	os.Setenv(testPrefix+"_KEY_1", "user.email")
-	os.Setenv(testPrefix+"_VALUE_1", "env@example.com")
-
-	defer func() {
-		os.Unsetenv(testPrefix + "_COUNT")
-		os.Unsetenv(testPrefix + "_KEY_0")
-		os.Unsetenv(testPrefix + "_VALUE_0")
-		os.Unsetenv(testPrefix + "_KEY_1")
-		os.Unsetenv(testPrefix + "_VALUE_1")
-	}()
+	t.Setenv(testPrefix+"_COUNT", "2")
+	t.Setenv(testPrefix+"_KEY_0", "user.name")
+	t.Setenv(testPrefix+"_VALUE_0", "Env User")
+	t.Setenv(testPrefix+"_KEY_1", "user.email")
+	t.Setenv(testPrefix+"_VALUE_1", "env@example.com")
 
 	var wg sync.WaitGroup
 	goroutines := 10
 	results := make([]*Config, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
@@ -345,7 +335,7 @@ func TestConcurrentEnvConfigLoad(t *testing.T) {
 	wg.Wait()
 
 	// Verify all loads succeeded
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		require.NotNil(t, results[i], "env config %d should not be nil", i)
 
 		name, ok := results[i].Get("user.name")
@@ -380,7 +370,7 @@ func TestConcurrentReadDuringLoad(t *testing.T) {
 	duration := 100 * time.Millisecond
 
 	// Goroutines continuously reading from existing config
-	for i := 0; i < readGoroutines; i++ {
+	for range readGoroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -394,7 +384,7 @@ func TestConcurrentReadDuringLoad(t *testing.T) {
 	}
 
 	// Goroutines loading new config instances
-	for i := 0; i < loadGoroutines; i++ {
+	for range loadGoroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -437,11 +427,11 @@ func TestNoDataRacesInGet(t *testing.T) {
 
 	// Run with race detector enabled:  go test -race
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				_, _ = cfg.Get("user.name")
 				_, _ = cfg.Get("core.editor")
 				_, _ = cfg.Get("remote.origin.url")

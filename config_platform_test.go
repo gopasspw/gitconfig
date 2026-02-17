@@ -288,7 +288,7 @@ func TestPlatformLongPaths(t *testing.T) {
 	deepPath := td
 
 	// Create a reasonably deep path (not MAX_PATH to avoid platform issues)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		deepPath = filepath.Join(deepPath, "verylongdirectorynametotest")
 	}
 
@@ -315,8 +315,6 @@ func TestPlatformLongPaths(t *testing.T) {
 
 // TestPlatformRelativePaths tests relative path handling.
 func TestPlatformRelativePaths(t *testing.T) {
-	t.Parallel()
-
 	td := t.TempDir()
 	configPath := filepath.Join(td, "config")
 
@@ -324,14 +322,8 @@ func TestPlatformRelativePaths(t *testing.T) {
 	err := os.WriteFile(configPath, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	// Save current directory
-	oldDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() { _ = os.Chdir(oldDir) }()
-
-	// Change to temp directory
-	err = os.Chdir(td)
-	require.NoError(t, err)
+	// Change to temp directory for relative path resolution
+	t.Chdir(td)
 
 	// Load with relative path
 	cfg, err := LoadConfig("config")
@@ -345,38 +337,14 @@ func TestPlatformRelativePaths(t *testing.T) {
 
 // TestPlatformEnvironmentVariables tests environment variable handling across platforms.
 func TestPlatformEnvironmentVariables(t *testing.T) {
-	t.Parallel()
-
 	// Set a test environment variable
 	testKey := "GITCONFIG_TEST_COUNT"
 	testKeyVar := "GITCONFIG_TEST_KEY_0"
 	testValueVar := "GITCONFIG_TEST_VALUE_0"
 
-	oldCount := os.Getenv(testKey)
-	oldKey := os.Getenv(testKeyVar)
-	oldValue := os.Getenv(testValueVar)
-
-	defer func() {
-		if oldCount == "" {
-			os.Unsetenv(testKey)
-		} else {
-			os.Setenv(testKey, oldCount)
-		}
-		if oldKey == "" {
-			os.Unsetenv(testKeyVar)
-		} else {
-			os.Setenv(testKeyVar, oldKey)
-		}
-		if oldValue == "" {
-			os.Unsetenv(testValueVar)
-		} else {
-			os.Setenv(testValueVar, oldValue)
-		}
-	}()
-
-	os.Setenv(testKey, "1")
-	os.Setenv(testKeyVar, "user.name")
-	os.Setenv(testValueVar, "From Env")
+	t.Setenv(testKey, "1")
+	t.Setenv(testKeyVar, "user.name")
+	t.Setenv(testValueVar, "From Env")
 
 	cfg := LoadConfigFromEnv("GITCONFIG_TEST")
 	require.NotNil(t, cfg)

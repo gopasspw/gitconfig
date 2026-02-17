@@ -540,7 +540,6 @@ func splitValueComment(rValue string) (string, string) {
 // Supports: \\, \", \n (newline), \t (tab), \b (backspace).
 // Other escape sequences (including octal) are not supported per Git config spec.
 func unescapeValue(value string) string {
-
 	value = strings.ReplaceAll(value, `\\`, `\`)
 	value = strings.ReplaceAll(value, `\"`, `"`)
 	value = strings.ReplaceAll(value, `\n`, "\n")

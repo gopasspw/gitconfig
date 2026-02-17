@@ -363,9 +363,9 @@ func TestEdgeCaseLargeConfigFile(t *testing.T) {
 
 	// Generate a large config with many sections and keys
 	var sb strings.Builder
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		sb.WriteString(fmt.Sprintf("[section%d]\n", i))
-		for j := 0; j < 5; j++ {
+		for j := range 5 {
 			sb.WriteString(fmt.Sprintf("\tkey%d = value_%d_%d\n", j, i, j))
 		}
 	}
