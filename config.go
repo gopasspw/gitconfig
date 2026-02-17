@@ -322,6 +322,9 @@ func (c *Config) insertValue(key, value string) error {
 	return c.flushRaw()
 }
 
+// formatKeyValue formats a configuration key-value pair for writing to file.
+// If the value is empty or whitespace-only, only the key is written.
+// The comment parameter preserves any trailing comment from the original line.
 func formatKeyValue(key, value, comment string) string {
 	if strings.TrimSpace(value) == "" {
 		return fmt.Sprintf(keyTpl, key, comment)
@@ -330,6 +333,14 @@ func formatKeyValue(key, value, comment string) string {
 	return fmt.Sprintf(keyValueTpl, key, value, comment)
 }
 
+// parseSectionHeader extracts the section and subsection from a config file section header line.
+// For example:
+//
+//	"[core]" returns ("core", "", false)
+//	"[remote \"origin\"]" returns ("remote", "origin", false)
+//	"[]" returns ("", "", true) to indicate skip
+//
+// The skip return value indicates whether this line should be ignored.
 func parseSectionHeader(line string) (section, subsection string, skip bool) { //nolint:nonamedreturns
 	line = strings.Trim(line, "[]")
 	if line == "" {
@@ -604,6 +615,11 @@ func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
 	return includePaths, includeExists
 }
 
+// getConditionalIncludes processes [includeIf "condition"] directives and returns
+// paths that match the current environment.
+// Supported conditions:
+//   - gitdir:<pattern> - Include if git directory matches pattern (case-sensitive)
+//   - gitdir/i:<pattern> - Include if git directory matches pattern (case-insensitive)
 func getConditionalIncludes(c *Config, workdir string) []string {
 	candidates := []string{}
 	for k := range c.vars {
@@ -698,6 +714,9 @@ func matchSubSection(subsec, workdir string, c *Config) bool {
 	return false
 }
 
+// prefixMatch checks if a path matches a prefix pattern, with optional case-folding.
+// This is used for gitdir: and gitdir/i: conditional includes.
+// The fold parameter controls case-insensitive matching.
 func prefixMatch(path, prefix string, fold bool) bool {
 	if !strings.HasSuffix(prefix, "/") {
 		return false
