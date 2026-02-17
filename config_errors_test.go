@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestConfigParseErrors tests error handling during config file parsing
+// TestConfigParseErrors tests error handling during config file parsing.
 func TestConfigParseErrors(t *testing.T) {
 	t.Parallel()
 
@@ -63,14 +63,14 @@ func TestConfigParseErrors(t *testing.T) {
 	}
 }
 
-// TestConfigFileNotFound tests behavior when config file doesn't exist
+// TestConfigFileNotFound tests behavior when config file doesn't exist.
 func TestConfigFileNotFound(t *testing.T) {
 	t.Parallel()
 
 	nonExistentPath := "/nonexistent/path/.git/config"
 	cfg, err := LoadConfig(nonExistentPath)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, cfg)
 
 	// Error should indicate file not found
@@ -79,7 +79,7 @@ func TestConfigFileNotFound(t *testing.T) {
 		strings.Contains(err.Error(), "cannot find"))
 }
 
-// TestConfigPermissionDenied tests behavior when config file is not readable
+// TestConfigPermissionDenied tests behavior when config file is not readable.
 func TestConfigPermissionDenied(t *testing.T) {
 	t.Parallel()
 
@@ -102,15 +102,15 @@ func TestConfigPermissionDenied(t *testing.T) {
 	cfg, err := LoadConfig(configPath)
 
 	// Restore permissions for cleanup
-	os.Chmod(configPath, 0o644)
+	_ = os.Chmod(configPath, 0o644)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, cfg)
 	assert.True(t, errors.Is(err, os.ErrPermission) ||
 		strings.Contains(err.Error(), "permission"))
 }
 
-// TestConfigFlushRawErrors tests error handling during write operations
+// TestConfigFlushRawErrors tests error handling during write operations.
 func TestConfigFlushRawErrors(t *testing.T) {
 	t.Parallel()
 
@@ -137,11 +137,11 @@ func TestConfigFlushRawErrors(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to write
-		cfg.Set("user.email", "test@example.com")
+		_ = cfg.Set("user.email", "test@example.com")
 		err = cfg.flushRaw()
 
 		// Restore permissions
-		os.Chmod(configPath, 0o644)
+		_ = os.Chmod(configPath, 0o644)
 
 		// Should get an error
 		assert.Error(t, err)
@@ -170,11 +170,11 @@ func TestConfigFlushRawErrors(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to write
-		cfg.Set("user.email", "test@example.com")
+		_ = cfg.Set("user.email", "test@example.com")
 		err = cfg.flushRaw()
 
 		// Restore permissions
-		os.Chmod(td, 0o755)
+		_ = os.Chmod(td, 0o755)
 
 		// Should get an error or succeed (depending on implementation)
 		// The important thing is that the directory permissions are restored
@@ -182,7 +182,7 @@ func TestConfigFlushRawErrors(t *testing.T) {
 	})
 }
 
-// TestSetGetErrors tests error handling for Set/Get operations
+// TestSetGetErrors tests error handling for Set/Get operations.
 func TestSetGetErrors(t *testing.T) {
 	t.Parallel()
 
@@ -201,7 +201,7 @@ func TestSetGetErrors(t *testing.T) {
 		// Try to get with invalid key format (no dot separator)
 		value, ok := cfg.Get("invalid")
 		assert.False(t, ok)
-		assert.Equal(t, "", value)
+		assert.Empty(t, value)
 	})
 
 	t.Run("set with special characters", func(t *testing.T) {
@@ -217,8 +217,8 @@ func TestSetGetErrors(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set with special characters
-		cfg.Set("user.name", "Test User")
-		cfg.Set("user.email", "test@example.com")
+		_ = cfg.Set("user.name", "Test User")
+		_ = cfg.Set("user.email", "test@example.com")
 
 		// Verify values are preserved
 		name, ok := cfg.Get("user.name")
@@ -259,7 +259,7 @@ func TestSetGetErrors(t *testing.T) {
 	})
 }
 
-// TestConfigUnsetErrors tests error handling for Unset operations
+// TestConfigUnsetErrors tests error handling for Unset operations.
 func TestConfigUnsetErrors(t *testing.T) {
 	t.Parallel()
 
@@ -290,7 +290,7 @@ func TestConfigUnsetErrors(t *testing.T) {
 	})
 }
 
-// TestEmptyConfigurationPersistence tests loading and setting on initially empty config
+// TestEmptyConfigurationPersistence tests loading and setting on initially empty config.
 func TestEmptyConfigurationPersistence(t *testing.T) {
 	t.Parallel()
 
@@ -326,7 +326,7 @@ func TestEmptyConfigurationPersistence(t *testing.T) {
 	assert.Equal(t, "Modified", value)
 }
 
-// TestParseConfigFromReader tests parsing from io.Reader
+// TestParseConfigFromReader tests parsing from io.Reader.
 func TestParseConfigFromReader(t *testing.T) {
 	t.Parallel()
 
@@ -383,17 +383,18 @@ func TestParseConfigFromReader(t *testing.T) {
 	})
 }
 
-// TestLoadConfigWithWorkdir tests loading config with workdir context
+// TestLoadConfigWithWorkdir tests loading config with workdir context.
 func TestLoadConfigWithWorkdir(t *testing.T) {
 	t.Parallel()
 
 	td := t.TempDir()
 	gitDir := filepath.Join(td, ".git")
-	os.MkdirAll(gitDir, 0o755)
+	err := os.MkdirAll(gitDir, 0o755)
+	require.NoError(t, err)
 
 	configPath := filepath.Join(gitDir, "config")
 	content := "[user]\n\tname = Test"
-	err := os.WriteFile(configPath, []byte(content), 0o644)
+	err = os.WriteFile(configPath, []byte(content), 0o644)
 	require.NoError(t, err)
 
 	// LoadConfigWithWorkdir can resolve includes relative to workdir
@@ -406,7 +407,7 @@ func TestLoadConfigWithWorkdir(t *testing.T) {
 	assert.Equal(t, "Test", name)
 }
 
-// TestConfigWithNoWrites tests noWrites flag
+// TestConfigWithNoWrites tests noWrites flag.
 func TestConfigWithNoWrites(t *testing.T) {
 	t.Parallel()
 
@@ -424,8 +425,8 @@ func TestConfigWithNoWrites(t *testing.T) {
 	cfg.noWrites = true
 
 	// Try to set and flush
-	cfg.Set("user.name", "Modified")
-	err = cfg.flushRaw()
+	_ = cfg.Set("user.name", "Modified")
+	_ = cfg.flushRaw()
 
 	// With noWrites, flushRaw should silently skip the write
 	// File should still have original content

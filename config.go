@@ -89,9 +89,10 @@ func (c *Config) IsEmpty() bool {
 // Note: Currently does not remove entire sections, only individual keys within sections.
 //
 // Example:
-//   if err := cfg.Unset("core.pager"); err != nil {
-//     log.Fatal(err)
-//   }
+//
+//	if err := cfg.Unset("core.pager"); err != nil {
+//	  log.Fatal(err)
+//	}
 func (c *Config) Unset(key string) error {
 	if c.readonly {
 		return nil
@@ -170,9 +171,10 @@ func (c *Config) GetAll(key string) ([]string, bool) {
 // Returns true even if the value is empty string (unlike checking Get with ok).
 //
 // Example:
-//   if cfg.IsSet("core.editor") {
-//     fmt.Println("Editor is configured")
-//   }
+//
+//	if cfg.IsSet("core.editor") {
+//	  fmt.Println("Editor is configured")
+//	}
 func (c *Config) IsSet(key string) bool {
 	key = canonicalizeKey(key)
 	_, present := c.vars[key]
@@ -196,9 +198,10 @@ func (c *Config) IsSet(key string) bool {
 // subsect names' case.
 //
 // Example:
-//   if err := cfg.Set("core.pager", "less"); err != nil {
-//     log.Fatal(err)
-//   }
+//
+//	if err := cfg.Set("core.pager", "less"); err != nil {
+//	  log.Fatal(err)
+//	}
 func (c *Config) Set(key, value string) error {
 	section, _, subkey := splitKey(key)
 	if section == "" || subkey == "" {

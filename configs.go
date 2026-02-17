@@ -127,9 +127,10 @@ func (cs *Configs) String() string {
 // - workdir: Working directory (usually repo root) to locate local/worktree configs
 //
 // Example:
-//   cfg := New()
-//   cfg.LoadAll("/path/to/repo")
-//   // Now ready to use Get, Set, etc.
+//
+//	cfg := New()
+//	cfg.LoadAll("/path/to/repo")
+//	// Now ready to use Get, Set, etc.
 func (cs *Configs) LoadAll(workdir string) *Configs {
 	cs.workdir = workdir
 
@@ -277,10 +278,11 @@ func (cs *Configs) HasGlobalConfig() bool {
 // Returns empty string if key not found in any scope.
 //
 // Example:
-//   editor := cfg.Get("core.editor")
-//   if editor != "" {
-//     fmt.Printf("Using editor: %s\n", editor)
-//   }
+//
+//	editor := cfg.Get("core.editor")
+//	if editor != "" {
+//	  fmt.Printf("Using editor: %s\n", editor)
+//	}
 func (cs *Configs) Get(key string) string {
 	for _, cfg := range []*Config{
 		cs.env,
@@ -362,7 +364,8 @@ func (cs *Configs) GetFrom(key string, scope string) (string, bool) {
 // Returns empty string if the key is not found in the global config.
 //
 // Example:
-//   name, _ := cfg.GetGlobal("user.name")
+//
+//	name, _ := cfg.GetGlobal("user.name")
 func (cs *Configs) GetGlobal(key string) string {
 	if cs.global == nil {
 		return ""
@@ -385,7 +388,8 @@ func (cs *Configs) GetGlobal(key string) string {
 // Returns empty string if the key is not found in the local config.
 //
 // Example:
-//   url, _ := cfg.GetLocal("remote.origin.url")
+//
+//	url, _ := cfg.GetLocal("remote.origin.url")
 func (cs *Configs) GetLocal(key string) string {
 	if cs.local == nil {
 		return ""
