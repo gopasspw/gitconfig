@@ -246,6 +246,29 @@ func (cs *Configs) GetAll(key string) []string {
 	return nil
 }
 
+// GetFrom returns the value for the given key from the given scope. Valid scopes are:
+// env, worktree, local, global, system and preset.
+func (cs *Configs) GetFrom(key string, scope string) (string, bool) {
+	switch strings.ToLower(scope) {
+	case "env":
+		return cs.env.Get(key)
+	case "worktree":
+		return cs.worktree.Get(key)
+	case "local":
+		return cs.local.Get(key)
+	case "global":
+		return cs.global.Get(key)
+	case "system":
+		return cs.system.Get(key)
+	case "preset":
+		return cs.Preset.Get(key)
+	default:
+		debug.V(3).Log("[%s] unknown config scope %s for key %s", cs.Name, scope, key)
+
+		return "", false
+	}
+}
+
 // GetGlobal specifically ask the per-user (global) config for a key.
 func (cs *Configs) GetGlobal(key string) string {
 	if cs.global == nil {

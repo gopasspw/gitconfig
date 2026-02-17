@@ -98,3 +98,68 @@ func TestConfigs(t *testing.T) {
 	require.NoError(t, c.SetEnv("env.var", "var"))
 	require.False(t, c.IsSet("env.nonexistent"))
 }
+
+func TestGetFrom(t *testing.T) {
+	td := t.TempDir()
+
+	t.Setenv("GOPASS_HOMEDIR", td)
+
+	c := New()
+	c.SystemConfig = filepath.Join(td, "system")
+	c.GlobalConfig = "global"
+	c.LocalConfig = "local"
+	c.WorktreeConfig = "worktree"
+	c.EnvPrefix = "GPTEST_CONFIG"
+
+	require.NoError(t, os.WriteFile(c.SystemConfig, []byte(`[system]
+	key = system
+`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, c.GlobalConfig), []byte(`[global]
+	key = global
+`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, c.LocalConfig), []byte(`[local]
+	key = local
+`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, c.WorktreeConfig), []byte(`[worktree]
+	key = worktree
+`), 0o600))
+	t.Setenv("GPTEST_CONFIG_COUNT", "1")
+	t.Setenv("GPTEST_CONFIG_KEY_0", "env.key")
+	t.Setenv("GPTEST_CONFIG_VALUE_0", "env")
+
+	// Load the configs
+	c.LoadAll(td)
+
+	// add a preset config
+	c.Preset = NewFromMap(map[string]string{"preset.key": "preset"})
+
+	// Valid scopes
+	v, ok := c.GetFrom("env.key", "env")
+	assert.True(t, ok)
+	assert.Equal(t, "env", v)
+
+	v, ok = c.GetFrom("worktree.key", "worktree")
+	assert.True(t, ok)
+	assert.Equal(t, "worktree", v)
+
+	v, ok = c.GetFrom("local.key", "local")
+	assert.True(t, ok)
+	assert.Equal(t, "local", v)
+
+	v, ok = c.GetFrom("global.key", "global")
+	assert.True(t, ok)
+	assert.Equal(t, "global", v)
+
+	v, ok = c.GetFrom("system.key", "system")
+	assert.True(t, ok)
+	assert.Equal(t, "system", v)
+
+	v, ok = c.GetFrom("preset.key", "preset")
+	assert.True(t, ok)
+	assert.Equal(t, "preset", v)
+
+	// Unknown scope
+	v, ok = c.GetFrom("any.key", "unknownscope")
+	assert.False(t, ok)
+	assert.Equal(t, "", v)
+}
