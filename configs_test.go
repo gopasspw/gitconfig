@@ -161,5 +161,5 @@ func TestGetFrom(t *testing.T) {
 	// Unknown scope
 	v, ok = c.GetFrom("any.key", "unknownscope")
 	assert.False(t, ok)
-	assert.Equal(t, "", v)
+	assert.Empty(t, v)
 }
