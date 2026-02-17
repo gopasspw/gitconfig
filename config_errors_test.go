@@ -257,6 +257,36 @@ func TestSetGetErrors(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, []string{"first", "second"}, values)
 	})
+
+	t.Run("invalid key errors", func(t *testing.T) {
+		t.Parallel()
+
+		td := t.TempDir()
+		configPath := filepath.Join(td, "config")
+
+		err := os.WriteFile(configPath, []byte(""), 0o644)
+		require.NoError(t, err)
+
+		cfg, err := LoadConfig(configPath)
+		require.NoError(t, err)
+
+		err = cfg.Set("invalid", "value")
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrInvalidKey)
+
+		err = cfg.Unset("invalid")
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrInvalidKey)
+	})
+}
+
+func TestConfigsWorkdirErrors(t *testing.T) {
+	t.Parallel()
+
+	cs := New()
+	err := cs.SetLocal("core.editor", "vim")
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrWorkdirNotSet)
 }
 
 // TestConfigUnsetErrors tests error handling for Unset operations.

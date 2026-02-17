@@ -98,6 +98,11 @@ func (c *Config) Unset(key string) error {
 		return nil
 	}
 
+	section, _, subkey := splitKey(key)
+	if section == "" || subkey == "" {
+		return fmt.Errorf("%w: %s", ErrInvalidKey, key)
+	}
+
 	key = canonicalizeKey(key)
 
 	_, present := c.vars[key]
@@ -205,7 +210,7 @@ func (c *Config) IsSet(key string) bool {
 func (c *Config) Set(key, value string) error {
 	section, _, subkey := splitKey(key)
 	if section == "" || subkey == "" {
-		return fmt.Errorf("invalid key: %s", key)
+		return fmt.Errorf("%w: %s", ErrInvalidKey, key)
 	}
 
 	// can't set env vars
@@ -384,13 +389,13 @@ func (c *Config) flushRaw() error {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
-		return fmt.Errorf("failed to create directory %q for %q: %w", filepath.Dir(c.path), c.path, err)
+		return fmt.Errorf("%w: %s: %w", ErrCreateConfigDir, filepath.Dir(c.path), err)
 	}
 
 	debug.V(3).Log("writing config to %s: \n--------------\n%s\n--------------", c.path, c.raw.String())
 
 	if err := os.WriteFile(c.path, []byte(c.raw.String()), 0o600); err != nil {
-		return fmt.Errorf("failed to write config to %s: %w", c.path, err)
+		return fmt.Errorf("%w: %s: %w", ErrWriteConfig, c.path, err)
 	}
 
 	debug.V(1).Log("wrote config to %s", c.path)

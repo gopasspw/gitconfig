@@ -428,13 +428,16 @@ func (cs *Configs) IsSet(key string) bool {
 
 // SetLocal sets (or adds) a key only in the per-directory (local) config.
 func (cs *Configs) SetLocal(key, value string) error {
+	if cs.workdir == "" {
+		return ErrWorkdirNotSet
+	}
 	if cs.local == nil {
-		if cs.workdir == "" {
-			return fmt.Errorf("no workdir set")
-		}
 		cs.local = &Config{
 			path: filepath.Join(cs.workdir, cs.LocalConfig),
 		}
+	}
+	if cs.local.path == "" {
+		cs.local.path = filepath.Join(cs.workdir, cs.LocalConfig)
 	}
 
 	return cs.local.Set(key, value)

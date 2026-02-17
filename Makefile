@@ -33,6 +33,28 @@ test:
 
 	@echo -n "     UNIT TESTS "
 	@$(GO) test -v
+	@printf '%s\n' '$(OK)'
+
+test-short:
+	@echo ">> TEST (SHORT)"
+
+	@echo -n "     UNIT TESTS "
+	@$(GO) test -short -v
+	@printf '%s\n' '$(OK)'
+
+test-race:
+	@echo ">> TEST (RACE)"
+
+	@echo -n "     UNIT TESTS "
+	@$(GO) test -race -v
+	@printf '%s\n' '$(OK)'
+
+bench:
+	@echo ">> BENCH"
+
+	@echo -n "     BENCHMARKS "
+	@$(GO) test -bench=. -benchmem ./...
+	@printf '%s\n' '$(OK)'
 
 fmt:
 	@keep-sorted --mode fix $(GOFILES_NOVENDOR)
@@ -40,4 +62,4 @@ fmt:
 	@$(GO) mod tidy
 
 
-.PHONY: clean build crosscompile test codequality
+.PHONY: clean build crosscompile test test-short test-race bench codequality

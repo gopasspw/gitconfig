@@ -85,6 +85,22 @@
 //	cfg.SetGlobal("user.signingkey", "...")  // Write to ~/.gitconfig
 //	cfg.SetSystem("core.pager", "less")      // Write to /etc/gitconfig
 //
+// ## Error Handling
+//
+// Use errors.Is to detect common error categories:
+//
+//	if err := cfg.Set("invalid", "value"); err != nil {
+//		if errors.Is(err, gitconfig.ErrInvalidKey) {
+//			// handle invalid key
+//		}
+//	}
+//
+//	if err := cfgs.SetLocal("core.editor", "vim"); err != nil {
+//		if errors.Is(err, gitconfig.ErrWorkdirNotSet) {
+//			// call LoadAll or provide a workdir
+//		}
+//	}
+//
 // # Versioning and Compatibility
 //
 // We aim to support the latest stable release of Git only.
