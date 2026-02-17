@@ -192,6 +192,10 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	return cs
 }
 
+// globalConfigFile returns the path to the global (per-user) config file using XDG base directory spec.
+//
+// The defaultlocation is $XDG_CONFIG_HOME/<name>/config (typically ~/.config/git/config for Git).
+// This follows the XDG Base Directory specification for user-specific configuration files.
 func globalConfigFile(name string) string {
 	// $XDG_CONFIG_HOME/git/config
 	return filepath.Join(appdir.New(name).UserConfig(), "config")
