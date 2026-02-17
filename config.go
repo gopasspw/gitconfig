@@ -27,8 +27,28 @@ var (
 	CompatMode bool
 )
 
-// Config is a single parsed config file. It contains a reference of the input file, if any.
-// It can only be populated only by reading the environment variables.
+// Config represents a single git configuration file from one scope.
+//
+// Config handles reading and writing a single configuration file while attempting
+// to preserve the original formatting (comments, whitespace, section order).
+//
+// Fields:
+// - path: File path of this config file
+// - readonly: If true, prevents any modifications (even in-memory)
+// - noWrites: If true, prevents persisting changes to disk (useful for testing)
+// - raw: Maintains the raw text representation for round-trip fidelity
+// - vars: Map of normalized keys to their values (may be multiple values per key)
+// - branch: Current git branch name (for onbranch conditionals)
+//
+// Note: Config is not thread-safe. Concurrent access from multiple goroutines
+// is not supported. Callers must provide synchronization if needed.
+//
+// Typical Usage:
+//
+//	cfg, err := LoadConfig("~/.gitconfig")
+//	if err != nil { ... }
+//	value, ok := cfg.Get("core.editor")
+//	if err := cfg.Set("core.pager", "less"); err != nil { ... }
 type Config struct {
 	path     string
 	readonly bool // do not allow modifying values (even in memory)
@@ -38,10 +58,14 @@ type Config struct {
 	branch   string
 }
 
-// IsEmpty returns true if the config is empty (typically a newly initialized config, but still unused).
-// Since gitconfig.New() already sets the global path to the globalConfigFile() one, we cannot rely on
-// the path being set to checki this. We need to check the  raw length to be sure it wasn't just
-// the default empty config struct.
+// IsEmpty returns true if the config is empty (no configuration loaded).
+//
+// An empty config is one that:
+// - Is nil
+// - Has no variables loaded
+// - Has no raw content (not just missing path reference)
+//
+// This is used to distinguish between "not yet loaded" and "loaded but empty file".
 func (c *Config) IsEmpty() bool {
 	if c == nil || c.vars == nil {
 		return true
@@ -54,7 +78,20 @@ func (c *Config) IsEmpty() bool {
 	return true
 }
 
-// Unset deletes a key.
+// Unset deletes a key from the config.
+//
+// Behavior:
+// - If the key exists, it's removed from vars and the raw config string
+// - If the key doesn't exist, this is a no-op (no error)
+// - The underlying config file is updated if possible
+// - Readonly configs silently ignore the unset operation
+//
+// Note: Currently does not remove entire sections, only individual keys within sections.
+//
+// Example:
+//   if err := cfg.Unset("core.pager"); err != nil {
+//     log.Fatal(err)
+//   }
 func (c *Config) Unset(key string) error {
 	if c.readonly {
 		return nil
@@ -75,6 +112,21 @@ func (c *Config) Unset(key string) error {
 }
 
 // Get returns the first value of the key.
+//
+// For keys with multiple values, Get returns only the first one.
+// Use GetAll to retrieve all values for a key.
+//
+// The key is case-insensitive for sections and key names but case-sensitive
+// for subsection names (per git-config specification).
+//
+// Returns (value, true) if the key is found, ("", false) otherwise.
+//
+// Example:
+//
+//	v, ok := cfg.Get("core.editor")
+//	if ok {
+//	  fmt.Printf("Editor: %s\n", v)
+//	}
 func (c *Config) Get(key string) (string, bool) {
 	key = canonicalizeKey(key)
 	vs, found := c.vars[key]
@@ -86,6 +138,23 @@ func (c *Config) Get(key string) (string, bool) {
 }
 
 // GetAll returns all values of the key.
+//
+// Git config allows multiple values for the same key. This is common for:
+// - Multiple include paths
+// - Multiple aliases
+// - Arrays in custom configurations
+//
+// Returns (values, true) if the key is found, (nil, false) otherwise.
+// If found, values will be non-nil but may be empty.
+//
+// Example:
+//
+//	paths, ok := cfg.GetAll("include.path")
+//	if ok {
+//	  for _, path := range paths {
+//	    fmt.Printf("Include: %s\n", path)
+//	  }
+//	}
 func (c *Config) GetAll(key string) ([]string, bool) {
 	key = canonicalizeKey(key)
 	vs, found := c.vars[key]
@@ -97,6 +166,13 @@ func (c *Config) GetAll(key string) ([]string, bool) {
 }
 
 // IsSet returns true if the key was set in this config.
+//
+// Returns true even if the value is empty string (unlike checking Get with ok).
+//
+// Example:
+//   if cfg.IsSet("core.editor") {
+//     fmt.Println("Editor is configured")
+//   }
 func (c *Config) IsSet(key string) bool {
 	key = canonicalizeKey(key)
 	_, present := c.vars[key]
@@ -104,8 +180,25 @@ func (c *Config) IsSet(key string) bool {
 	return present
 }
 
-// Set updates or adds a key in the config. If possible it will also update the underlying
-// config file on disk.
+// Set updates or adds a key in the config.
+//
+// Behavior:
+// - If the key exists, the first value is updated
+// - If the key doesn't exist, it's added to an existing section or a new section
+// - If possible, the underlying config file is written to disk
+// - Original formatting (comments, whitespace) is preserved where possible
+//
+// Errors:
+// - Returns error if readonly or key is invalid (missing section or key name)
+// - Returns error if file write fails (but in-memory value may be set)
+//
+// This method normalizes the key (lowercase sections and key names) but preserves
+// subsect names' case.
+//
+// Example:
+//   if err := cfg.Set("core.pager", "less"); err != nil {
+//     log.Fatal(err)
+//   }
 func (c *Config) Set(key, value string) error {
 	section, _, subkey := splitKey(key)
 	if section == "" || subkey == "" {
