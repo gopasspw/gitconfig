@@ -10,7 +10,7 @@ Please be respectful and constructive in all interactions within this project.
 
 ### Prerequisites
 
-- Go 1.22 or later
+- Go 1.24 or later
 - Git
 - Make
 
@@ -40,44 +40,7 @@ All tests should pass and no linting errors should be reported.
 
 ## Making Changes
 
-### Branch Strategy
-
-Create a feature branch for your work:
-
-```bash
-git checkout -b feature/my-feature
-# or
-git checkout -b fix/my-fix
-```
-
-Use descriptive branch names that indicate the type of change.
-
-### Code Style
-
-1. **Format your code:**
-
-   ```bash
-   make fmt
-   ```
-
-   This runs:
-   - `keep-sorted` for import organization
-   - `gofumpt` for aggressive Go formatting
-   - `go mod tidy`
-
-2. **Follow Go conventions:**
-   - Use clear, descriptive names
-   - Document exported functions with godoc comments
-   - Keep functions focused and testable
-   - Common abbreviations: cfg, err, ok, v, vs (values)
-
-3. **Linting:**
-
-   ```bash
-   make codequality
-   ```
-
-   All linting errors must be resolved before submitting a pull request.
+Please see [Development Workflow](DEVELOPMENT.md#development-workflow).
 
 ### Testing
 

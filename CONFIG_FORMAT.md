@@ -179,10 +179,10 @@ Include files based on conditions:
 
 - `gitdir:<pattern>` - Include if git directory matches pattern (case-sensitive)
 - `gitdir/i:<pattern>` - Include if git directory matches pattern (case-insensitive)
+- `onbranch:<pattern>` - Include if operating on a specific branch
 
 **Current limitations:**
 
-- `onbranch:<pattern>` - Not supported
 - `hasconfig:remote.*.url:<pattern>` - Not supported
 
 ### Include Precedence

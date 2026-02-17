@@ -18,7 +18,7 @@ This guide covers the development workflow, architecture decisions, and implemen
 
 ### Prerequisites
 
-- **Go**: 1.20 or later
+- **Go**: 1.24 or later
 - **golangci-lint**: For code quality checks
 - **make**: For build automation
 - **git**: For version control
@@ -485,11 +485,12 @@ go test -bench=. -benchmem
 
 ### Version Numbering
 
-Currently, the project does not use semantic versioning. Coordinate with maintainers before tagging releases.
+The project does use semantic versioning.
 
 ### Release Checklist
 
 1. **Update CHANGELOG.md**
+
    - Add new version section
    - List all changes since last release
    - Categorize: Added, Changed, Deprecated, Removed, Fixed, Security
@@ -504,12 +505,11 @@ Currently, the project does not use semantic versioning. Coordinate with maintai
 3. **Test cross-compilation**
 
    ```bash
-   GOOS=windows go build ./...
-   GOOS=darwin go build ./...
-   GOOS=linux go build ./...
+   make crosscompile
    ```
 
 4. **Update documentation**
+
    - Ensure README is current
    - Check godoc examples
    - Verify all links work
@@ -522,7 +522,6 @@ Currently, the project does not use semantic versioning. Coordinate with maintai
    ```
 
 6. **Announce**
-   - Create GitHub release
    - Update dependent projects (gopass)
 
 ## Additional Resources
@@ -552,11 +551,3 @@ When reviewing PRs:
 - [ ] CHANGELOG updated if user-facing change
 - [ ] Cross-platform considerations addressed
 - [ ] No breaking changes (or clearly documented)
-
-### Common Review Feedback
-
-- "Please add tests for error paths"
-- "Update godoc with example"
-- "Run `make fmt` to format code"
-- "Add entry to CHANGELOG.md"
-- "Consider backward compatibility"

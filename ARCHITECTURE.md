@@ -14,6 +14,7 @@ Git config has a hierarchical scope system. Each scope corresponds to a differen
 
 ```text
 Priority (highest to lowest):
+
   Environment Variables (GIT_CONFIG_*)
     ↓
   Per-Worktree Config (.git/config.worktree)
@@ -36,7 +37,6 @@ Git config keys follow a hierarchical structure:
 ```text
 section.key                 → Simple value
 section.subsection.key      → Value in a subsection
-array.values[0]             → Array element (internally represented)
 ```
 
 Keys are normalized according to git rules:
@@ -392,28 +392,6 @@ Git also supports conditional includes (gitconfig 2.13+):
 
 ## Future Extensibility
 
-### Potential Enhancements
-
-1. **Streaming large files**
-   - Current: Load entire file into memory
-   - Future: Stream mode for very large files
-   - Would reduce memory usage but complicate API
-
-2. **Type system**
-   - Current: All values are strings
-   - Future: Optional type coercion (string, bool, int)
-   - Would improve usability but add API complexity
-
-3. **Schema validation**
-   - Current: No validation of keys/values
-   - Future: Optional schema to validate allowed keys
-   - Would catch errors earlier but may be too opinionated
-
-4. **Watch mode**
-   - Current: No detection of external changes
-   - Future: File watcher for external modifications
-   - Would require async APIs
-
 ### Design Stability
 
 The core API is stable and unlikely to change significantly because:
@@ -424,34 +402,4 @@ The core API is stable and unlikely to change significantly because:
 
 ## Testing Strategy
 
-### Test Organization
-
-```text
-config_test.go          → Config struct tests
-configs_test.go         → Configs struct tests
-utils_test.go           → Utility function tests
-gitconfig_test.go       → Integration tests
-```
-
-### Test Coverage
-
-Target coverage: > 80%
-
-Test categories:
-
-1. **Happy path:** Normal operations
-2. **Error cases:** Missing files, parsing errors
-3. **Edge cases:** Empty configs, special characters, multi-values
-4. **Integration:** Multiple scopes, includes, real-world scenarios
-
-## Summary
-
-The gitconfig library implements a minimal, focused approach to git configuration:
-
-- **Single responsibility:** Parse and manipulate git config files
-- **Preservation:** Maintains formatting and comments
-- **Simplicity:** Minimal API, no hidden behavior
-- **Compatibility:** Follows git semantics closely
-- **Performance:** Adequate for typical use cases (startup-time config loading)
-
-The design prioritizes correctness, clarity, and compatibility with git over raw performance optimization.
+Unit tests with a target coverage: > 80%

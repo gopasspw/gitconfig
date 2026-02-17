@@ -5,6 +5,7 @@ This directory contains practical examples demonstrating how to use the gitconfi
 ## Examples
 
 ### 1. [Basic Read](01-basic-read.go)
+
 Demonstrates reading configuration values from git config using the simple Config API.
 
 **Topics:**
@@ -104,7 +105,7 @@ go run -tags=examples examples/06-includes.go
 
 ## Prerequisites
 
-Before running these examples, ensure you have Go 1.22 or later installed:
+Before running these examples, ensure you have Go 1.24 or later installed:
 
 ```bash
 go version
