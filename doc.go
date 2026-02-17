@@ -24,27 +24,66 @@
 // `gopass` and other users of this package can easily customize file and environment
 // names by utilizing the exported variables from the Configs struct:
 //
-//   - SystemConfig
-//   - GlobalConfig (can be set to the empty string to disable)
-//   - LocalConfig
-//   - WorktreeConfig
-//   - EnvPrefix
+//   - SystemConfig - Path to system-wide config (e.g., /etc/gitconfig)
+//   - GlobalConfig - Path to user config (e.g., ~/.gitconfig) or "" to disable
+//   - LocalConfig - Per-repository config name (e.g., .git/config)
+//   - WorktreeConfig - Per-worktree config name (e.g., .git/config.worktree)
+//   - EnvPrefix - Environment variable prefix (defaults to GIT_CONFIG)
 //
 // Note: For tests users will want to set `NoWrites = true` to avoid overwriting
 // their real configs.
 //
-// Example
+// # Examples
 //
-//	import "github.com/gopasspw/gopass/pkg/gitconfig"
+// ## Loading and Reading Configuration
 //
-//	func main() {
-//		cfg := gitconfig.New()
-//		cfg.SystemConfig = "/etc/gopass/config"
-//		cfg.GlobalConfig = ""
-//		cfg.EnvPrefix = "GOPASS_CONFIG"
-//		cfg.LoadAll(".")
-//		_ = cfg.Get("core.notifications")
-//	}
+// Basic reading from all scopes (respects precedence):
+//
+//	cfg := gitconfig.New()
+//	cfg.LoadAll(".")
+//	value := cfg.Get("user.name")
+//	fmt.Println(value)  // Reads from highest priority scope available
+//
+// ## Reading from Specific Scopes
+//
+// Access configuration from a specific scope:
+//
+//	cfg := gitconfig.New()
+//	cfg.LoadAll(".")
+//	local := cfg.GetLocal("core.editor")
+//	global := cfg.GetGlobal("user.email")
+//	system := cfg.GetSystem("core.pager")
+//
+// ## Customization for Other Applications
+//
+// Configure for a different application (like gopass):
+//
+//	cfg := gitconfig.New()
+//	cfg.SystemConfig = "/etc/gopass/config"
+//	cfg.GlobalConfig = ""
+//	cfg.LocalConfig = ".gopass-config"
+//	cfg.EnvPrefix = "GOPASS_CONFIG"
+//	cfg.LoadAll(".")
+//	notifications := cfg.Get("core.notifications")
+//
+// ## Writing Configuration
+//
+// Modify and persist changes:
+//
+//	cfg, _ := gitconfig.LoadConfig(".git/config")
+//	cfg.Set("user.name", "John Doe")
+//	cfg.Set("user.email", "john@example.com")
+//	cfg.Write()  // Persist changes to disk
+//
+// ## Scope-Specific Writes
+//
+// Write to specific scopes in multi-scope configs:
+//
+//	cfg := gitconfig.New()
+//	cfg.LoadAll(".")
+//	cfg.SetLocal("core.autocrlf", "true")   // Write to .git/config
+//	cfg.SetGlobal("user.signingkey", "...")  // Write to ~/.gitconfig
+//	cfg.SetSystem("core.pager", "less")      // Write to /etc/gitconfig
 //
 // # Versioning and Compatibility
 //
