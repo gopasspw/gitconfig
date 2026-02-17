@@ -59,11 +59,13 @@ Values follow the `=` sign:
 ```
 
 **Value types:**
+
 - **String**: Any text (quotes optional unless special characters present)
 - **Boolean**: `true`, `false`, `yes`, `no`, `on`, `off`, `1`, `0`
 - **Integer**: Numeric value (parsed as string by this library)
 
 **Special characters in values:**
+
 ```ini
 [section]
     # Quoted string with spaces
@@ -89,6 +91,7 @@ Within double-quoted strings:
 | `\b` | Backspace |
 
 Example:
+
 ```ini
 [alias]
     log1 = "log --pretty=format:\"%h %s\""
@@ -136,6 +139,7 @@ Some keys can have multiple values:
 ```
 
 Access with:
+
 ```go
 values, ok := cfg.GetAll("remote.origin.fetch")
 // values = ["+refs/heads/*...", "+refs/pull/*..."]
@@ -154,6 +158,7 @@ Include other config files:
 ```
 
 **Path resolution:**
+
 - Relative paths are resolved from the directory of the current config file
 - `~` expands to user home directory
 - Absolute paths work as expected
@@ -171,10 +176,12 @@ Include files based on conditions:
 ```
 
 **Supported conditions:**
+
 - `gitdir:<pattern>` - Include if git directory matches pattern (case-sensitive)
 - `gitdir/i:<pattern>` - Include if git directory matches pattern (case-insensitive)
 
 **Current limitations:**
+
 - `onbranch:<pattern>` - Not supported
 - `hasconfig:remote.*.url:<pattern>` - Not supported
 
@@ -204,6 +211,7 @@ section.subsection.key
 ```
 
 Examples:
+
 ```ini
 [core]
     editor = vim
@@ -324,12 +332,14 @@ Default locations by scope:
 This library attempts to preserve the original file structure when writing:
 
 **Preserved:**
+
 - Comments (full-line)
 - Blank lines
 - Section order
 - Key order within sections
 
 **Not Always Preserved:**
+
 - Exact whitespace formatting (tabs vs spaces)
 - Inline comments
 - Specific indentation
@@ -337,12 +347,14 @@ This library attempts to preserve the original file structure when writing:
 ### Limitations
 
 **Not Supported:**
+
 - Bare boolean values (keys without `=` sign)
 - Some advanced include conditions (onbranch, hasconfig)
 - URL rewrite patterns
 - Replacing specific instances of multivars
 
 **Partial Support:**
+
 - Worktree configurations
 - Some escape sequences
 - Inline comments
@@ -366,18 +378,21 @@ This library attempts to preserve the original file structure when writing:
 ### Common Errors
 
 **1. Missing section header:**
+
 ```ini
 # ERROR: key without section
 key = value
 ```
 
 **2. Invalid section syntax:**
+
 ```ini
 # ERROR: unmatched quotes
 [section "subsection]
 ```
 
 **3. Circular includes:**
+
 ```ini
 # config-a
 [include]
@@ -389,6 +404,7 @@ key = value
 ```
 
 **4. Invalid escape sequences:**
+
 ```ini
 [section]
     # ERROR: unknown escape sequence
@@ -403,6 +419,7 @@ key = value
    - System defaults → System (`/etc/gitconfig`)
 
 2. **Quote values with special characters**
+
    ```ini
    [section]
        # Good
@@ -413,6 +430,7 @@ key = value
    ```
 
 3. **Comment your configuration**
+
    ```ini
    [core]
        # Use vim for commit messages
@@ -420,6 +438,7 @@ key = value
    ```
 
 4. **Organize related settings**
+
    ```ini
    [user]
        name = Jane Doe
@@ -433,6 +452,7 @@ key = value
    ```
 
 5. **Use includes for environment-specific settings**
+
    ```ini
    # ~/.gitconfig
    [include]
@@ -490,6 +510,7 @@ key = value
 ### Environment-Specific Configuration
 
 **Personal** (`~/.gitconfig-personal`):
+
 ```ini
 [user]
     email = personal@gmail.com
@@ -499,6 +520,7 @@ key = value
 ```
 
 **Work** (`~/.gitconfig-work`):
+
 ```ini
 [user]
     email = jane.doe@company.com
@@ -513,6 +535,6 @@ key = value
 
 ## References
 
-- **Official Git Documentation**: https://git-scm.com/docs/git-config
-- **Configuration File Format**: https://mirrors.edge.kernel.org/pub/software/scm/git/docs/git-config.html
-- **Git Book - Configuration**: https://git-scm.com/book/en/v2/Customizing-Git-Git-Configuration
+- **Official Git Documentation**: <https://git-scm.com/docs/git-config>
+- **Configuration File Format**: <https://mirrors.edge.kernel.org/pub/software/scm/git/docs/git-config.html>
+- **Git Book - Configuration**: <https://git-scm.com/book/en/v2/Customizing-Git-Git-Configuration>

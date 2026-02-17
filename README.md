@@ -184,10 +184,12 @@ The library supports Git's `[include]` and `[includeIf]` directives:
 ```
 
 **Supported `includeIf` conditions:**
+
 - `gitdir:` - Include if git directory matches pattern
 - `gitdir/i:` - Case-insensitive gitdir match
 
 **Current limitations:**
+
 - Other conditional types (onbranch, hasconfig) are not yet supported
 - Relative paths in includes are resolved from the config file's directory
 
@@ -246,6 +248,7 @@ These limitations reflect the primary use case supporting [gopass](https://githu
 This library aims to support the latest stable release of Git. We currently do not provide semantic versioning guarantees but aim to maintain backwards compatibility where possible.
 
 **Compatibility goals:**
+
 - Parse any valid Git config file correctly
 - Preserve config file structure when writing
 - Handle edge cases gracefully (malformed input, missing files, etc.)
@@ -290,6 +293,12 @@ go test -v ./...
 # Run with coverage
 go test -cover ./...
 
+# Generate a coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | tail -1
+
+# Current coverage (2026-02-17): 89.9%
+
 # Run specific test
 go test -run TestLoadConfig
 ```
@@ -301,6 +310,7 @@ This package is licensed under the [MIT License](https://opensource.org/licenses
 This repository is maintained to support the needs of [gopass](https://github.com/gopasspw/gopass), a password manager for the command line. We aim to make it universally useful for all Go projects that need Git config parsing.
 
 **Maintainers:**
+
 - Primary development and maintenance for gopass integration
 
 **Contributing:**

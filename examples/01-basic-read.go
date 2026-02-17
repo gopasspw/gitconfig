@@ -1,5 +1,5 @@
-//go:build ignore
-// +build ignore
+//go:build examples
+// +build examples
 
 package main
 
@@ -28,7 +28,9 @@ func main() {
 	defer os.RemoveAll(tmpDir)
 
 	configPath := filepath.Join(tmpDir, ".git", "config")
-	os.MkdirAll(filepath.Dir(configPath), 0o755)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		log.Fatal(err)
+	}
 
 	// Write a sample config file
 	sampleConfig := `[user]
@@ -49,7 +51,7 @@ func main() {
 	fmt.Println("=== Example 1: Basic Read ===\n")
 
 	// Load the config file
-	cfg, err := gitconfig.NewConfig(configPath)
+	cfg, err := gitconfig.LoadConfig(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}

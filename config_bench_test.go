@@ -16,9 +16,7 @@ func BenchmarkLoadConfig(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-
-	for range b.N {
+	for b.Loop() {
 		cfg, err := LoadConfig(configPath)
 		if err != nil {
 			b.Fatal(err)
@@ -43,9 +41,7 @@ func BenchmarkGet(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-
-	for range b.N {
+	for b.Loop() {
 		_, ok := cfg.Get("user.name")
 		if !ok {
 			b.Fatal("missing key")

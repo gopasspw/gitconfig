@@ -17,17 +17,20 @@ Please be respectful and constructive in all interactions within this project.
 ### Development Setup
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/gopasspw/gitconfig.git
 cd gitconfig
 ```
 
-2. Install dependencies:
+1. Install dependencies:
+
 ```bash
 go mod tidy
 ```
 
-3. Verify your setup:
+1. Verify your setup:
+
 ```bash
 make test
 make codequality
@@ -40,6 +43,7 @@ All tests should pass and no linting errors should be reported.
 ### Branch Strategy
 
 Create a feature branch for your work:
+
 ```bash
 git checkout -b feature/my-feature
 # or
@@ -51,9 +55,11 @@ Use descriptive branch names that indicate the type of change.
 ### Code Style
 
 1. **Format your code:**
+
    ```bash
    make fmt
    ```
+
    This runs:
    - `keep-sorted` for import organization
    - `gofumpt` for aggressive Go formatting
@@ -66,9 +72,11 @@ Use descriptive branch names that indicate the type of change.
    - Common abbreviations: cfg, err, ok, v, vs (values)
 
 3. **Linting:**
+
    ```bash
    make codequality
    ```
+
    All linting errors must be resolved before submitting a pull request.
 
 ### Testing
@@ -95,41 +103,43 @@ go test -race ./...
 5. **Assertions:** Use `testify/assert` and `testify/require`
 
 Example test:
+
 ```go
 func TestMyFeature(t *testing.T) {
-	t.Parallel()
+ t.Parallel()
 
-	testCases := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{
-			name:    "simple case",
-			input:   "test",
-			want:    "result",
-			wantErr: false,
-		},
-	}
+ testCases := []struct {
+  name    string
+  input   string
+  want    string
+  wantErr bool
+ }{
+  {
+   name:    "simple case",
+   input:   "test",
+   want:    "result",
+   wantErr: false,
+  },
+ }
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := MyFunction(tc.input)
-			if tc.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.want, got)
-			}
-		})
-	}
+ for _, tc := range testCases {
+  t.Run(tc.name, func(t *testing.T) {
+   got, err := MyFunction(tc.input)
+   if tc.wantErr {
+    assert.Error(t, err)
+   } else {
+    assert.NoError(t, err)
+    assert.Equal(t, tc.want, got)
+   }
+  })
+ }
 }
 ```
 
 #### Test Coverage
 
 When adding new functionality:
+
 - Aim for >80% code coverage
 - Test both the success path and error cases
 - Include edge case tests
@@ -150,6 +160,7 @@ Fixes #123
 ```
 
 Common types:
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation change
@@ -159,7 +170,8 @@ Common types:
 - `chore`: Build, dependencies, or tooling
 
 Example:
-```
+
+```text
 feat(parser): add support for bare boolean values
 
 Add parsing support for bare boolean values in gitconfig files
@@ -174,17 +186,20 @@ Fixes #42
 ### Before Submitting
 
 1. Ensure all tests pass:
+
    ```bash
    make test
    ```
 
 2. Run code quality checks:
+
    ```bash
    make codequality
    make fmt
    ```
 
 3. Verify cross-compilation works (if changing platform-specific code):
+
    ```bash
    make crosscompile
    ```
@@ -227,6 +242,7 @@ Steps to verify the changes work.
 ## Code Review
 
 Expect constructive feedback on:
+
 - Code clarity and maintainability
 - Test coverage
 - Documentation completeness
@@ -256,6 +272,7 @@ Expect constructive feedback on:
 ### Adding Dependencies
 
 Before adding a new dependency:
+
 1. Check if stdlib or existing deps can solve the problem
 2. Verify license compatibility (must be MIT or compatible)
 3. Ensure it's pure Go (no CGo)

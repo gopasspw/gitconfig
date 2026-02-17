@@ -1,5 +1,5 @@
-//go:build ignore
-// +build ignore
+//go:build examples
+// +build examples
 
 package main
 
@@ -74,7 +74,7 @@ func main() {
 	}
 
 	// Load the main config (which includes others)
-	cfg, err := gitconfig.NewConfig(mainPath)
+	cfg, err := gitconfig.LoadConfig(mainPath)
 	if err != nil {
 		log.Fatal(err)
 	}

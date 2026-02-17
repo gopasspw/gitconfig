@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Improved documentation with CONTRIBUTING.md guide
 - Example programs in examples/ directory
 - Comprehensive API documentation in doc.go
@@ -18,17 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for gitdir/i (case-insensitive) conditionals
 
 ### Changed
+
 - Enhanced error messages
 - Improved parsing logic for edge cases
 - Better handling of escape sequences
 
 ### Fixed
+
 - Improved stability in include file resolution
 - Better validation of key formats
 
 ## [0.1.0] - 2024-01-01
 
 ### Added
+
 - Initial release with core gitconfig parsing
 - Support for multiple config scopes (system, global, local, worktree, env)
 - Config file mutation while preserving comments and whitespace
@@ -38,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite
 
 ### Features
+
 - Parse git configuration files without git CLI dependency
 - Read/write config values with scope management
 - Support for subsections and special characters in keys
@@ -46,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config merging from multiple sources
 
 ### Known Limitations
+
 - Worktree support is only partial
 - Bare boolean values not supported
 - includeIf support only includes gitdir and onbranch conditions

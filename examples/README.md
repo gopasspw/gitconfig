@@ -8,32 +8,39 @@ This directory contains practical examples demonstrating how to use the gitconfi
 Demonstrates reading configuration values from git config using the simple Config API.
 
 **Topics:**
+
 - Loading a config file
 - Reading string values
 - Handling missing keys
 
 **Run:**
+
 ```bash
-go run examples/01-basic-read.go
+go run -tags=examples examples/01-basic-read.go
 ```
 
 ### 2. [Write and Persist](02-write-persist.go)
+
 Shows how to modify configuration values and persist changes back to disk.
 
 **Topics:**
+
 - Setting configuration values
 - Persistence to file
 - Verifying changes on disk
 
 **Run:**
+
 ```bash
-go run examples/02-write-persist.go
+go run -tags=examples examples/02-write-persist.go
 ```
 
 ### 3. [Understanding Scopes](03-scopes.go)
+
 Demonstrates the configuration scope hierarchy and how gitconfig resolves values across scopes.
 
 **Topics:**
+
 - System-wide config
 - User config
 - Local repository config
@@ -41,48 +48,58 @@ Demonstrates the configuration scope hierarchy and how gitconfig resolves values
 - Scope priority/precedence
 
 **Run:**
+
 ```bash
-go run examples/03-scopes.go
+go run -tags=examples examples/03-scopes.go
 ```
 
 ### 4. [Custom Paths](04-custom-paths.go)
+
 Shows how to work with custom configuration file paths instead of default Git locations.
 
 **Topics:**
+
 - Custom config paths
 - Non-standard locations
 - Loading from arbitrary files
 
 **Run:**
+
 ```bash
-go run examples/04-custom-paths.go
+go run -tags=examples examples/04-custom-paths.go
 ```
 
 ### 5. [Error Handling](05-error-handling.go)
+
 Demonstrates proper error handling patterns when working with gitconfig.
 
 **Topics:**
+
 - Parse errors
 - File not found
 - Permission errors
 - Invalid key formats
 
 **Run:**
+
 ```bash
-go run examples/05-error-handling.go
+go run -tags=examples examples/05-error-handling.go
 ```
 
 ### 6. [Include Files](06-includes.go)
+
 Shows how gitconfig handles include directives for modular configuration.
 
 **Topics:**
+
 - Including other config files
 - Conditional includes
 - External config organization
 
 **Run:**
+
 ```bash
-go run examples/06-includes.go
+go run -tags=examples examples/06-includes.go
 ```
 
 ## Prerequisites
@@ -96,7 +113,7 @@ go version
 ## How to Use These Examples
 
 1. Each example is a standalone Go file
-2. Run with `go run examples/<number>-<name>.go`
+2. Run with `go run -tags=examples examples/<number>-<name>.go`
 3. Some examples create temporary files for demonstration
 4. Review the source code to understand each pattern
 5. Modify and experiment to learn more

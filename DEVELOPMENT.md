@@ -65,6 +65,7 @@ type Config struct {
 **Key design decision**: Maintains both `parsed` (for quick lookups) and `raw` (for format preservation) representations. When writing, the library updates the raw representation to preserve comments, whitespace, and structure.
 
 **Methods**:
+
 - `LoadConfig(path)` - Load from file
 - `Get(key)` / `GetAll(key)` - Read values
 - `Set(key, value)` - Write values
@@ -90,6 +91,7 @@ type Configs struct {
 **Precedence order**: env > worktree > local > global > system > preset
 
 **Methods**:
+
 - `LoadAll(workdir)` - Load all scopes
 - `Get(key)` - Read from combined config (respects precedence)
 - `GetLocal(key)`, `GetGlobal(key)`, etc. - Scope-specific reads
@@ -109,7 +111,7 @@ Helper functions for parsing and formatting:
 
 ### Data Flow
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │  User API Call (Get/Set)                            │
 └──────────────────┬──────────────────────────────────┘
@@ -143,6 +145,7 @@ Helper functions for parsing and formatting:
 ### Making Changes
 
 1. **Create a feature branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -153,6 +156,7 @@ Helper functions for parsing and formatting:
    - Update documentation
 
 3. **Run quality checks**
+
    ```bash
    make fmt          # Format code
    make test         # Run tests
@@ -160,6 +164,7 @@ Helper functions for parsing and formatting:
    ```
 
 4. **Commit with conventional commits**
+
    ```bash
    git commit -m "feat: add support for X"
    git commit -m "fix: handle edge case Y"
@@ -167,6 +172,7 @@ Helper functions for parsing and formatting:
    ```
 
 5. **Push and create PR**
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -187,7 +193,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ### File Structure
 
-```
+```text
 gitconfig/
 ├── config.go              # Single config file handling
 ├── configs.go             # Multi-scope coordination
@@ -230,7 +236,7 @@ gitconfig/
 ### Code Style Guidelines
 
 1. **Function length**: Keep functions focused and under ~50 lines
-2. **Comments**: 
+2. **Comments**:
    - All exported functions need godoc comments
    - Complex logic needs inline comments
    - Use complete sentences with periods
@@ -319,6 +325,8 @@ go test -cover ./...
 # Generate coverage report
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
+
+# Current coverage (2026-02-17): 89.9%
 ```
 
 ## Common Development Tasks
@@ -327,6 +335,7 @@ go tool cover -html=coverage.out
 
 1. **Determine scope** (Config or Configs)
 2. **Add method**:
+
    ```go
    // GetBool retrieves a boolean value from config.
    func (c *Configs) GetBool(key string) (bool, bool) {
@@ -338,13 +347,16 @@ go tool cover -html=coverage.out
        return parseBool(val), true
    }
    ```
+
 3. **Add tests**:
+
    ```go
    func TestGetBool(t *testing.T) {
        t.Parallel()
        // Test cases...
    }
    ```
+
 4. **Update documentation** in `doc.go` if user-facing
 
 ### Adding Support for a New Section Type
@@ -364,10 +376,12 @@ go tool cover -html=coverage.out
 ### Cross-Platform Considerations
 
 Platform-specific code goes in:
+
 - `gitconfig_windows.go` - Windows (`//go:build windows`)
 - `gitconfig_others.go` - Unix/Linux (`//go:build !windows`)
 
 Example:
+
 ```go
 // gitconfig_windows.go
 //go:build windows
@@ -414,14 +428,17 @@ func (c *Config) Load() error {
 ### Common Issues
 
 **Issue**: Tests fail with permission errors
+
 - **Solution**: Ensure using `t.TempDir()` for test files
 - **Solution**: Check file permissions in test setup
 
 **Issue**: Include tests fail inconsistently
+
 - **Solution**: Check for absolute vs relative path handling
 - **Solution**: Verify include depth limits
 
 **Issue**: Write operations don't preserve format
+
 - **Solution**: Check that `raw` slice is being updated
 - **Solution**: Verify line matching logic in write operations
 
@@ -459,6 +476,7 @@ func BenchmarkParseKey(b *testing.B) {
 ```
 
 Run benchmarks:
+
 ```bash
 go test -bench=. -benchmem
 ```
@@ -477,12 +495,14 @@ Currently, the project does not use semantic versioning. Coordinate with maintai
    - Categorize: Added, Changed, Deprecated, Removed, Fixed, Security
 
 2. **Run full test suite**
+
    ```bash
    make test
    make codequality
    ```
 
 3. **Test cross-compilation**
+
    ```bash
    GOOS=windows go build ./...
    GOOS=darwin go build ./...
@@ -495,6 +515,7 @@ Currently, the project does not use semantic versioning. Coordinate with maintai
    - Verify all links work
 
 5. **Tag release**
+
    ```bash
    git tag -a v0.x.y -m "Release v0.x.y"
    git push origin v0.x.y
@@ -510,7 +531,7 @@ Currently, the project does not use semantic versioning. Coordinate with maintai
 - **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines
 - **Format**: See [CONFIG_FORMAT.md](CONFIG_FORMAT.md) for Git config format details
 - **Examples**: See [examples/](examples/) for usage examples
-- **Git Docs**: https://git-scm.com/docs/git-config
+- **Git Docs**: <https://git-scm.com/docs/git-config>
 
 ## Getting Help
 
@@ -523,6 +544,7 @@ Currently, the project does not use semantic versioning. Coordinate with maintai
 ### Code Review Checklist
 
 When reviewing PRs:
+
 - [ ] Tests added for new functionality
 - [ ] Tests pass and coverage doesn't decrease
 - [ ] Code follows existing style

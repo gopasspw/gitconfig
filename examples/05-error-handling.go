@@ -1,5 +1,5 @@
-//go:build ignore
-// +build ignore
+//go:build examples
+// +build examples
 
 package main
 
@@ -25,7 +25,7 @@ func main() {
 
 	// Error 1: File not found
 	fmt.Println("Error 1: File not found")
-	cfg, err := gitconfig.NewConfig("/nonexistent/path/.git/config")
+	cfg, err := gitconfig.LoadConfig("/nonexistent/path/.git/config")
 	if err != nil {
 		fmt.Printf("  Expected error: %v\n", err)
 	}
@@ -39,7 +39,7 @@ func main() {
 	os.WriteFile(restrictedPath, []byte("[user]\n    name = Test"), 0o644)
 	os.Chmod(restrictedPath, 0o000) // Remove all permissions
 
-	cfg, err = gitconfig.NewConfig(restrictedPath)
+	cfg, err = gitconfig.LoadConfig(restrictedPath)
 	if err != nil {
 		fmt.Printf("  Expected error: %v\n", err)
 	}
@@ -52,7 +52,7 @@ func main() {
     name = John
 `), 0o644) // Missing closing bracket
 
-	cfg, err = gitconfig.NewConfig(badConfigPath)
+	cfg, err = gitconfig.LoadConfig(badConfigPath)
 	if err != nil {
 		fmt.Printf("  Parse error detected: %v\n", err)
 	}
@@ -62,12 +62,10 @@ func main() {
 	writePath := filepath.Join(tmpDir, "write-test")
 	os.WriteFile(writePath, []byte("[user]\n    name = Test"), 0o644)
 
-	cfg, err = gitconfig.NewConfig(writePath)
+	cfg, err = gitconfig.LoadConfig(writePath)
 	if err == nil {
-		cfg.Set("user.email", "test@example.com")
-
 		os.Chmod(tmpDir, 0o000) // Remove write permissions
-		err = cfg.Write()
+		err = cfg.Set("user.email", "test@example.com")
 		if err != nil {
 			fmt.Printf("  Expected write error: %v\n", err)
 		}
@@ -85,7 +83,7 @@ func main() {
 `), 0o644)
 
 	// Pattern: Load with error checking
-	cfg, err = gitconfig.NewConfig(goodConfigPath)
+	cfg, err = gitconfig.LoadConfig(goodConfigPath)
 	if err != nil {
 		fmt.Printf("  Failed to load config: %v\n", err)
 		fmt.Println("  Continuing with fallback...")
@@ -101,9 +99,7 @@ func main() {
 	fmt.Printf("  user.name = %s\n", name)
 
 	// Pattern: Write with error checking
-	cfg.Set("user.email", "newemail@example.com")
-	err = cfg.Write()
-	if err != nil {
+	if err := cfg.Set("user.email", "newemail@example.com"); err != nil {
 		fmt.Printf("  Failed to write config: %v\n", err)
 		log.Printf("Warning: Could not persist changes")
 	} else {
@@ -112,31 +108,33 @@ func main() {
 
 	// Error 6: Multi-scope errors
 	fmt.Println("\nError 6: Multi-scope errors (Configs)")
-	configs := gitconfig.NewConfigs()
+	configs := gitconfig.New()
+	if err := os.Setenv("GOPASS_HOMEDIR", tmpDir); err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		_ = os.Unsetenv("GOPASS_HOMEDIR")
+	}()
 
 	// Set paths to non-existent files (this is okay for Configs)
-	configs.SetConfigPath(gitconfig.ConfigLocal, filepath.Join(tmpDir, "nonexistent-local"))
-	configs.SetConfigPath(gitconfig.ConfigGlobal, filepath.Join(tmpDir, "nonexistent-global"))
+	configs.LocalConfig = filepath.Join(".git", "config")
+	configs.GlobalConfig = "nonexistent-global"
 
-	// LoadAll might handle missing files differently
-	err = configs.LoadAll()
-	if err != nil {
-		fmt.Printf("  LoadAll error: %v\n", err)
-	} else {
-		fmt.Println("  LoadAll succeeded (skipped missing files)")
-	}
+	// LoadAll handles missing files gracefully
+	configs.LoadAll(tmpDir)
+	fmt.Println("  LoadAll succeeded (skipped missing files)")
 
 	fmt.Println("\n=== Common Error Patterns ===")
-	fmt.Println("1. Check errors after NewConfig() and LoadAll()")
+	fmt.Println("1. Check errors after LoadConfig() and LoadAll()")
 	fmt.Println("2. Use if ok := cfg.Get(key) pattern for optional values")
-	fmt.Println("3. Check Write() errors when persisting changes")
+	fmt.Println("3. Check Set() errors when persisting changes")
 	fmt.Println("4. Handle permission errors gracefully")
 	fmt.Println("5. Provide fallback values for critical config")
 
 	fmt.Println("\n=== Summary ===")
 	fmt.Println("Always check errors when:")
 	fmt.Println("  - Loading config files (might not exist or be unreadable)")
-	fmt.Println("  - Writing config files (might lose permissions)")
+	fmt.Println("  - Updating config files (might lose permissions)")
 	fmt.Println("  - Parsing config (malformed files)")
 	fmt.Println("Use (value, ok) pattern for optional config values.")
 }

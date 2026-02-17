@@ -1,5 +1,5 @@
-//go:build ignore
-// +build ignore
+//go:build examples
+// +build examples
 
 package main
 
@@ -46,7 +46,7 @@ func main() {
 	fmt.Println("Loading config from custom path:")
 	fmt.Printf("  Path: %s\n", customPath1)
 
-	cfg1, err := gitconfig.NewConfig(customPath1)
+	cfg1, err := gitconfig.LoadConfig(customPath1)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -83,12 +83,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cfgA, err := gitconfig.NewConfig(configA)
+	cfgA, err := gitconfig.LoadConfig(configA)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	cfgB, err := gitconfig.NewConfig(configB)
+	cfgB, err := gitconfig.LoadConfig(configB)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,26 +114,32 @@ func main() {
 	customPath2 := filepath.Join(tmpDir, "new-config")
 	fmt.Printf("  Creating new config at: %s\n", customPath2)
 
-	// Create empty config in memory (doesn't need to exist yet)
-	cfg3, err := gitconfig.NewConfig(customPath2)
+	// Create empty config file
+	if err := os.WriteFile(customPath2, []byte(""), 0o644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Load empty config
+	cfg3, err := gitconfig.LoadConfig(customPath2)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Add values
-	cfg3.Set("app.name", "NewApp")
-	cfg3.Set("app.version", "2.0")
-	cfg3.Set("environment", "production")
-
-	// Write to disk
-	err = cfg3.Write()
-	if err != nil {
+	if err := cfg3.Set("app.name", "NewApp"); err != nil {
 		log.Fatal(err)
 	}
+	if err := cfg3.Set("app.version", "2.0"); err != nil {
+		log.Fatal(err)
+	}
+	if err := cfg3.Set("app.environment", "production"); err != nil {
+		log.Fatal(err)
+	}
+
 	fmt.Println("  Config written successfully!")
 
 	// Verify by loading it back
-	cfg3Reloaded, err := gitconfig.NewConfig(customPath2)
+	cfg3Reloaded, err := gitconfig.LoadConfig(customPath2)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -145,12 +151,12 @@ func main() {
 	if ver, ok := cfg3Reloaded.Get("app.version"); ok {
 		fmt.Printf("    app.version = %s\n", ver)
 	}
-	if env, ok := cfg3Reloaded.Get("environment"); ok {
-		fmt.Printf("    environment = %s\n", env)
+	if env, ok := cfg3Reloaded.Get("app.environment"); ok {
+		fmt.Printf("    app.environment = %s\n", env)
 	}
 
 	fmt.Println("\n=== Summary ===")
-	fmt.Println("NewConfig() accepts any file path as an argument.")
+	fmt.Println("LoadConfig() accepts any file path as an argument.")
 	fmt.Println("This allows using gitconfig for non-Git applications.")
 	fmt.Println("Useful for config files with git-config format.")
 }

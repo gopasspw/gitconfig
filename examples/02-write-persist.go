@@ -1,5 +1,5 @@
-//go:build ignore
-// +build ignore
+//go:build examples
+// +build examples
 
 package main
 
@@ -29,7 +29,9 @@ func main() {
 	defer os.RemoveAll(tmpDir)
 
 	configPath := filepath.Join(tmpDir, ".git", "config")
-	os.MkdirAll(filepath.Dir(configPath), 0o755)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		log.Fatal(err)
+	}
 
 	// Write initial config
 	initialConfig := `[user]
@@ -45,7 +47,7 @@ func main() {
 	fmt.Println("=== Example 2: Write and Persist ===\n")
 
 	// Load the config file
-	cfg, err := gitconfig.NewConfig(configPath)
+	cfg, err := gitconfig.LoadConfig(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,24 +57,25 @@ func main() {
 
 	// Modify values
 	fmt.Println("\nModifying configuration...")
-	cfg.Set("user.email", "john.doe@example.com")
-	cfg.Set("core.pager", "less -R")
-	cfg.Set("core.autocrlf", "false")
+	if err := cfg.Set("user.email", "john.doe@example.com"); err != nil {
+		log.Fatal(err)
+	}
+	if err := cfg.Set("core.pager", "less -R"); err != nil {
+		log.Fatal(err)
+	}
+	if err := cfg.Set("core.autocrlf", "false"); err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Println("After modifications (in memory):")
 	printValues(cfg, []string{"user.name", "user.email", "core.editor", "core.pager", "core.autocrlf"})
 
-	// Persist changes to disk
-	fmt.Println("\nPersisting changes to disk...")
-	err = cfg.Write()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Changes persisted successfully!")
+	// Set automatically persists to disk when the config has a path
+	fmt.Println("\nChanges persisted to disk.")
 
 	// Reload from disk to verify
 	fmt.Println("\nReloading config from disk...")
-	cfg2, err := gitconfig.NewConfig(configPath)
+	cfg2, err := gitconfig.LoadConfig(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,7 +92,7 @@ func main() {
 	fmt.Println(string(content))
 
 	fmt.Println("=== Summary ===")
-	fmt.Println("Configuration values can be modified and persisted using Set() and Write().")
+	fmt.Println("Configuration values can be modified and persisted using Set().")
 	fmt.Println("The library preserves formatting of the original file.")
 }
 

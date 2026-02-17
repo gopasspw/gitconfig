@@ -1,5 +1,5 @@
-//go:build ignore
-// +build ignore
+//go:build examples
+// +build examples
 
 package main
 
@@ -33,8 +33,17 @@ func main() {
 	}
 	defer os.RemoveAll(tmpDir)
 
+	if err := os.Setenv("GOPASS_HOMEDIR", tmpDir); err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		_ = os.Unsetenv("GOPASS_HOMEDIR")
+	}()
+
 	gitDir := filepath.Join(tmpDir, ".git")
-	os.MkdirAll(gitDir, 0o755)
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Println("=== Example 3: Understanding Scopes ===\n")
 
@@ -77,12 +86,12 @@ func main() {
 
 	// Create a Configs object that loads all scopes
 	// Note: This example uses custom paths since we don't have a real system setup
-	cfg := gitconfig.NewConfigs()
+	cfg := gitconfig.New()
 
 	// Manually customize paths for this example
-	cfg.SetConfigPath(gitconfig.ConfigLocal, localConfig)
-	cfg.SetConfigPath(gitconfig.ConfigGlobal, globalConfig)
-	cfg.SetConfigPath(gitconfig.ConfigSystem, systemConfig)
+	cfg.SystemConfig = systemConfig
+	cfg.GlobalConfig = "gitconfig-global"
+	cfg.LocalConfig = filepath.Join(".git", "config")
 
 	fmt.Println("Config scope hierarchy (highest to lowest priority):")
 	fmt.Println("  1. Environment variables")
@@ -93,10 +102,7 @@ func main() {
 	fmt.Println("  6. Presets (built-in defaults)")
 
 	// Load and display
-	err = cfg.LoadAll()
-	if err != nil {
-		log.Fatal(err)
-	}
+	cfg.LoadAll(tmpDir)
 
 	fmt.Println("\nResolved values (respecting scope priority):")
 	fmt.Println("  user.name =", getOrDefault(cfg, "user.name"))
@@ -113,14 +119,14 @@ func main() {
 	// Show how to access specific scopes directly
 	fmt.Println("\nAccessing specific scopes directly:")
 
-	local, err := gitconfig.NewConfig(localConfig)
+	local, err := gitconfig.LoadConfig(localConfig)
 	if err == nil {
 		if name, ok := local.Get("user.name"); ok {
 			fmt.Printf("  local user.name = %s\n", name)
 		}
 	}
 
-	global, err := gitconfig.NewConfig(globalConfig)
+	global, err := gitconfig.LoadConfig(globalConfig)
 	if err == nil {
 		if editor, ok := global.Get("core.editor"); ok {
 			fmt.Printf("  global core.editor = %s\n", editor)

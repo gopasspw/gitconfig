@@ -67,6 +67,7 @@ All indirect dependencies are test-related infrastructure:
 ## Licensing
 
 All dependencies use licenses compatible with gitconfig's MIT license:
+
 - gobwas/glob: MIT
 - gopasspw/gopass: MIT  
 - stretchr/testify: MIT (Apache 2.0 compatible)
@@ -90,6 +91,7 @@ go mod tidy
 ```
 
 After updating dependencies, always:
+
 1. Run tests: `make test`
 2. Run linting: `make codequality`
 3. Verify cross-compilation: `make crosscompile`
