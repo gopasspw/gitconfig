@@ -25,7 +25,8 @@
 // names by utilizing the exported variables from the Configs struct:
 //
 //   - SystemConfig - Path to system-wide config (e.g., /etc/gitconfig)
-//   - GlobalConfig - Path to user config (e.g., ~/.gitconfig) or "" to disable
+//   - GlobalConfig - Path to user config, absolute or relative to the user's
+//     home directory (e.g., .gitconfig), or "" to disable
 //   - LocalConfig - Per-repository config name (e.g., .git/config)
 //   - WorktreeConfig - Per-worktree config name (e.g., .git/config.worktree)
 //   - EnvPrefix - Environment variable prefix (defaults to GIT_CONFIG)
