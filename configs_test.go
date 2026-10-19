@@ -163,3 +163,103 @@ func TestGetFrom(t *testing.T) {
 	assert.False(t, ok)
 	assert.Empty(t, v)
 }
+
+func writeTestConfig(t *testing.T, path, value string) {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+	require.NoError(t, os.WriteFile(path, []byte("[test]\n\tvalue = "+value+"\n"), 0o600))
+}
+
+func TestGlobalConfigPaths(t *testing.T) {
+	newConfigs := func(t *testing.T) (*Configs, string, string) {
+		t.Helper()
+
+		home := t.TempDir()
+		t.Setenv("GOPASS_HOMEDIR", home)
+		t.Setenv("GITCONFIG_TEST_NOSYSTEM", "1")
+
+		c := New()
+		c.EnvPrefix = "GITCONFIG_TEST"
+
+		return c, home, filepath.Join(home, ".config", "git", "config")
+	}
+
+	t.Run("absolute path is used as-is and takes precedence over the XDG location", func(t *testing.T) {
+		c, _, xdgConfig := newConfigs(t)
+		writeTestConfig(t, xdgConfig, "xdg")
+
+		absConfig := filepath.Join(t.TempDir(), "gopass", "config")
+		writeTestConfig(t, absConfig, "absolute")
+
+		c.GlobalConfig = absConfig
+		c.LoadAll("")
+
+		assert.True(t, c.HasGlobalConfig())
+		assert.Equal(t, "absolute", c.Get("test.value"))
+	})
+
+	t.Run("relative path is resolved below the home directory", func(t *testing.T) {
+		c, home, _ := newConfigs(t)
+		writeTestConfig(t, filepath.Join(home, "custom", "config"), "relative")
+
+		c.GlobalConfig = filepath.Join("custom", "config")
+		c.LoadAll("")
+
+		assert.True(t, c.HasGlobalConfig())
+		assert.Equal(t, "relative", c.Get("test.value"))
+	})
+
+	t.Run("XDG location keeps precedence over a relative path", func(t *testing.T) {
+		c, home, xdgConfig := newConfigs(t)
+		writeTestConfig(t, filepath.Join(home, "custom", "config"), "relative")
+		writeTestConfig(t, xdgConfig, "xdg")
+
+		c.GlobalConfig = filepath.Join("custom", "config")
+		c.LoadAll("")
+
+		assert.Equal(t, "xdg", c.Get("test.value"))
+	})
+
+	t.Run("missing absolute path does not fall back to the XDG location", func(t *testing.T) {
+		c, _, xdgConfig := newConfigs(t)
+		writeTestConfig(t, xdgConfig, "xdg")
+
+		c.GlobalConfig = filepath.Join(t.TempDir(), "gopass", "config")
+		c.LoadAll("")
+
+		assert.False(t, c.HasGlobalConfig())
+		assert.Empty(t, c.Get("test.value"))
+	})
+
+	t.Run("absolute path is the write target when no config exists", func(t *testing.T) {
+		c, _, xdgConfig := newConfigs(t)
+		absConfig := filepath.Join(t.TempDir(), "gopass", "config")
+
+		c.GlobalConfig = absConfig
+		c.LoadAll("")
+
+		require.NoError(t, c.SetGlobal("test.value", "written"))
+
+		written, err := LoadConfig(absConfig)
+		require.NoError(t, err)
+
+		value, ok := written.Get("test.value")
+		require.True(t, ok)
+		assert.Equal(t, "written", value)
+
+		_, err = os.Stat(xdgConfig)
+		assert.True(t, os.IsNotExist(err), "must not create a default config at the XDG location")
+	})
+
+	t.Run("empty GlobalConfig only uses the XDG location", func(t *testing.T) {
+		c, _, xdgConfig := newConfigs(t)
+		writeTestConfig(t, xdgConfig, "xdg")
+
+		c.GlobalConfig = ""
+		c.LoadAll("")
+
+		assert.True(t, c.HasGlobalConfig())
+		assert.Equal(t, "xdg", c.Get("test.value"))
+	})
+}

@@ -145,7 +145,7 @@ cfg := gitconfig.New()
 
 // Customize config file locations
 cfg.SystemConfig = "/etc/gopass/config"
-cfg.GlobalConfig = "~/.config/gopass/config"
+cfg.GlobalConfig = ".config/gopass/config" // relative to $HOME, absolute paths are used as-is
 cfg.LocalConfig = ".gopass-config"
 cfg.WorktreeConfig = ""  // Disable worktree config
 
@@ -162,7 +162,7 @@ cfg.LoadAll(".")
 ### Customization Options
 
 - **SystemConfig** - Path to system-wide configuration file
-- **GlobalConfig** - Path to user's global configuration (set to `""` to disable)
+- **GlobalConfig** - Path to the user's global configuration, absolute or relative to `$HOME` (set to `""` to disable)
 - **LocalConfig** - Filename for repository-local config
 - **WorktreeConfig** - Filename for worktree-specific config (or `""` to disable)
 - **EnvPrefix** - Prefix for environment variables (e.g., `MYAPP_CONFIG`)

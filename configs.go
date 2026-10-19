@@ -65,7 +65,7 @@ type Configs struct {
 // Default settings:
 // - Name: "git"
 // - SystemConfig: "/etc/gitconfig" (Unix) or auto-detected (Windows)
-// - GlobalConfig: "~/.gitconfig"
+// - GlobalConfig: ".gitconfig" (relative to home, absolute paths are used as-is)
 // - LocalConfig: "config" (relative to workdir)
 // - WorktreeConfig: "config.worktree" (relative to workdir)
 // - EnvPrefix: "GIT_CONFIG"
@@ -205,14 +205,7 @@ func globalConfigFile(name string) string {
 // Since we might need to try different locations but only want to use the first one
 // it's easier to handle this in its own method.
 func (cs *Configs) loadGlobalConfigs() string {
-	locs := []string{
-		globalConfigFile(cs.Name),
-	}
-
-	if cs.GlobalConfig != "" {
-		// ~/.gitconfig
-		locs = append(locs, filepath.Join(appdir.UserHome(), cs.GlobalConfig))
-	}
+	locs := cs.globalConfigCandidates()
 
 	// if we already have a global config we can just reload it instead of trying all locations
 	if !cs.global.IsEmpty() {
@@ -231,11 +224,6 @@ func (cs *Configs) loadGlobalConfigs() string {
 
 	debug.V(1).Log("[%s] trying to find global configs in %v", cs.Name, locs)
 	for _, p := range locs {
-		// GlobalConfig might be set to an empty string to disable it
-		// and instead of the XDG_CONFIG_HOME path only.
-		if p == "" {
-			continue
-		}
 		cfg, err := LoadConfig(p)
 		if err != nil {
 			debug.V(1).Log("[%s] failed to load global config from %s: %s", cs.Name, p, err)
@@ -253,10 +241,43 @@ func (cs *Configs) loadGlobalConfigs() string {
 
 	// set the path to the default one in case we want to write to it (create it) later
 	cs.global = &Config{
-		path: globalConfigFile(cs.Name),
+		path: cs.globalConfigWritePath(),
 	}
 
 	return ""
+}
+
+// globalConfigCandidates returns the locations of the per-user (global) config
+// in decreasing order of priority.
+//
+// An absolute GlobalConfig is used as-is and takes precedence over the XDG
+// location, mirroring git which stops considering the XDG location once
+// GIT_CONFIG_GLOBAL is set. A relative GlobalConfig, such as the default
+// ".gitconfig", is resolved below the user's home directory and only tried
+// after the XDG location.
+func (cs *Configs) globalConfigCandidates() []string {
+	xdgConfig := globalConfigFile(cs.Name)
+
+	if cs.GlobalConfig == "" {
+		return []string{xdgConfig}
+	}
+
+	if filepath.IsAbs(cs.GlobalConfig) {
+		return []string{cs.GlobalConfig}
+	}
+
+	return []string{xdgConfig, filepath.Join(appdir.UserHome(), cs.GlobalConfig)}
+}
+
+// globalConfigWritePath returns the location for a new global config if none
+// exists yet. An absolute GlobalConfig is the write target, so a default file
+// at the XDG location cannot shadow it on later runs.
+func (cs *Configs) globalConfigWritePath() string {
+	if filepath.IsAbs(cs.GlobalConfig) {
+		return cs.GlobalConfig
+	}
+
+	return globalConfigFile(cs.Name)
 }
 
 // HasGlobalConfig indicates if a per-user config can be found.
