@@ -153,6 +153,8 @@ func (c *Config) Get(key string) (string, bool) {
 // Returns (values, true) if the key is found, (nil, false) otherwise.
 // If found, values will be non-nil but may be empty.
 //
+// The returned slice is a copy; modifying it does not affect the Config.
+//
 // Example:
 //
 //	paths, ok := cfg.GetAll("include.path")
@@ -168,7 +170,75 @@ func (c *Config) GetAll(key string) ([]string, bool) {
 		return nil, false
 	}
 
-	return vs, true
+	return slices.Clone(vs), true
+}
+
+// Keys returns the sorted list of all keys in this config scope.
+//
+// Each key has the form section[.subsection].key, as described by splitKey.
+// Subsection names retain their original case, section and key names are
+// lowercased (see canonicalizeKey). Multi-value keys are returned only once.
+//
+// Returns an empty (non-nil) slice for an empty or nil config.
+//
+// Example:
+//
+//	for _, key := range cfg.Keys() {
+//	  value, _ := cfg.Get(key)
+//	  fmt.Printf("%s=%s\n", key, value)
+//	}
+func (c *Config) Keys() []string {
+	if c == nil || len(c.vars) == 0 {
+		return []string{}
+	}
+
+	return slices.Sorted(maps.Keys(c.vars))
+}
+
+// List returns all keys matching the given prefix. The prefix can be empty,
+// then this is identical to Keys().
+//
+// Example:
+//
+//	for _, key := range cfg.List("remote.") {
+//	  fmt.Println(key)
+//	}
+func (c *Config) List(prefix string) []string {
+	keys := c.Keys()
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+
+	return out
+}
+
+// Entries returns a copy of all keys and their values in this config scope.
+//
+// The result is a deep copy. Modifying the returned map or any of its value
+// slices does not affect the Config. Keys are returned in canonical form and
+// the values of a key retain their order of appearance in the config file.
+//
+// Returns an empty (non-nil) map for an empty or nil config.
+//
+// Example:
+//
+//	for key, values := range cfg.Entries() {
+//	  fmt.Printf("%s: %v\n", key, values)
+//	}
+func (c *Config) Entries() map[string][]string {
+	if c == nil {
+		return map[string][]string{}
+	}
+
+	entries := make(map[string][]string, len(c.vars))
+	for k, vs := range c.vars {
+		entries[k] = slices.Clone(vs)
+	}
+
+	return entries
 }
 
 // IsSet returns true if the key was set in this config.

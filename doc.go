@@ -55,6 +55,31 @@
 //	global := cfg.GetGlobal("user.email")
 //	system := cfg.GetSystem("core.pager")
 //
+// ## Enumerating Keys
+//
+// List the keys of all scopes, filtered by prefix, or of a single scope:
+//
+//	cfg := gitconfig.New()
+//	cfg.LoadAll(".")
+//
+//	for _, key := range cfg.Keys() {         // keys of all scopes, sorted
+//		fmt.Printf("%s=%s\n", key, cfg.Get(key))
+//	}
+//	for _, key := range cfg.List("remote.") { // prefix filtered
+//		fmt.Println(key)
+//	}
+//
+//	local, ok := cfg.Scope("local") // reach a single scope
+//	if ok {
+//		for key, values := range local.Entries() { // key -> all values
+//			fmt.Printf("%s: %v\n", key, values)
+//		}
+//	}
+//
+// Keys returns canonical keys (section[.subsection].key) with sections and
+// key names lowercased and subsections case preserved. Entries returns a
+// deep copy, so callers may modify the result without affecting the config.
+//
 // ## Customization for Other Applications
 //
 // Configure for a different application (like gopass):

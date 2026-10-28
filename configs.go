@@ -287,6 +287,61 @@ func (cs *Configs) HasGlobalConfig() bool {
 	return cs.loadGlobalConfigs() != ""
 }
 
+// scopesByPriority returns all non-nil config scopes in decreasing priority.
+func (cs *Configs) scopesByPriority() []*Config {
+	out := make([]*Config, 0, 6)
+	for _, cfg := range []*Config{
+		cs.env,
+		cs.worktree,
+		cs.local,
+		cs.global,
+		cs.system,
+		cs.Preset,
+	} {
+		if cfg != nil {
+			out = append(out, cfg)
+		}
+	}
+
+	return out
+}
+
+// Scope returns the Config object for the given scope, or false if the scope
+// is unknown. The returned Config is the live config of that scope, i.e.
+// changes made through it (Set, Unset) affect the Configs as a whole. Use it
+// to iterate the keys and values of a single scope:
+//
+//	local, ok := cfg.Scope("local")
+//	if ok {
+//	  for key, values := range local.Entries() {
+//	    fmt.Printf("%s: %v\n", key, values)
+//	  }
+//	}
+//
+// Valid scopes (case-insensitive) are: env, worktree, local, global, system
+// and preset. They match the scopes accepted by GetFrom. Note that a Scope may
+// be non-nil but not yet loaded, e.g. when LoadAll has not been called.
+func (cs *Configs) Scope(name string) (*Config, bool) {
+	switch strings.ToLower(name) {
+	case "env":
+		return cs.env, cs.env != nil
+	case "worktree":
+		return cs.worktree, cs.worktree != nil
+	case "local":
+		return cs.local, cs.local != nil
+	case "global":
+		return cs.global, cs.global != nil
+	case "system":
+		return cs.system, cs.system != nil
+	case "preset":
+		return cs.Preset, cs.Preset != nil
+	default:
+		debug.V(3).Log("[%s] unknown config scope %s", cs.Name, name)
+
+		return nil, false
+	}
+}
+
 // Get returns the value for the given key from the first scope that contains it.
 //
 // Lookup Order (by scope priority):
@@ -309,17 +364,7 @@ func (cs *Configs) HasGlobalConfig() bool {
 //	  fmt.Printf("Using editor: %s\n", editor)
 //	}
 func (cs *Configs) Get(key string) string {
-	for _, cfg := range []*Config{
-		cs.env,
-		cs.worktree,
-		cs.local,
-		cs.global,
-		cs.system,
-		cs.Preset,
-	} {
-		if cfg == nil || cfg.vars == nil {
-			continue
-		}
+	for _, cfg := range cs.scopesByPriority() {
 		if v, found := cfg.Get(key); found {
 			return v
 		}
@@ -337,17 +382,7 @@ func (cs *Configs) Get(key string) string {
 //
 // Returns nil if key not found in any scope.
 func (cs *Configs) GetAll(key string) []string {
-	for _, cfg := range []*Config{
-		cs.env,
-		cs.worktree,
-		cs.local,
-		cs.global,
-		cs.system,
-		cs.Preset,
-	} {
-		if cfg == nil || cfg.vars == nil {
-			continue
-		}
+	for _, cfg := range cs.scopesByPriority() {
 		if vs, found := cfg.GetAll(key); found {
 			return vs
 		}
@@ -361,24 +396,14 @@ func (cs *Configs) GetAll(key string) []string {
 // GetFrom returns the value for the given key from the given scope. Valid scopes are:
 // env, worktree, local, global, system and preset.
 func (cs *Configs) GetFrom(key string, scope string) (string, bool) {
-	switch strings.ToLower(scope) {
-	case "env":
-		return cs.env.Get(key)
-	case "worktree":
-		return cs.worktree.Get(key)
-	case "local":
-		return cs.local.Get(key)
-	case "global":
-		return cs.global.Get(key)
-	case "system":
-		return cs.system.Get(key)
-	case "preset":
-		return cs.Preset.Get(key)
-	default:
+	cfg, ok := cs.Scope(scope)
+	if !ok {
 		debug.V(3).Log("[%s] unknown config scope %s for key %s", cs.Name, scope, key)
 
 		return "", false
 	}
+
+	return cfg.Get(key)
 }
 
 // GetGlobal specifically asks the per-user (global) config for a key.
@@ -431,15 +456,8 @@ func (cs *Configs) GetLocal(key string) string {
 
 // IsSet returns true if this key is set in any of our configs.
 func (cs *Configs) IsSet(key string) bool {
-	for _, cfg := range []*Config{
-		cs.env,
-		cs.worktree,
-		cs.local,
-		cs.global,
-		cs.system,
-		cs.Preset,
-	} {
-		if cfg != nil && cfg.IsSet(key) {
+	for _, cfg := range cs.scopesByPriority() {
+		if cfg.IsSet(key) {
 			return true
 		}
 	}
@@ -515,20 +533,8 @@ func (cs *Configs) UnsetGlobal(key string) error {
 func (cs *Configs) Keys() []string {
 	keys := make([]string, 0, 128)
 
-	for _, cfg := range []*Config{
-		cs.Preset,
-		cs.system,
-		cs.global,
-		cs.local,
-		cs.worktree,
-		cs.env,
-	} {
-		if cfg == nil {
-			continue
-		}
-		for k := range cfg.vars {
-			keys = append(keys, k)
-		}
+	for _, cfg := range cs.scopesByPriority() {
+		keys = append(keys, cfg.Keys()...)
 	}
 
 	return set.Sorted(keys)

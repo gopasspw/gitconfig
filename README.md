@@ -223,6 +223,36 @@ fetchSpecs, ok := cfg.GetAll("remote.origin.fetch")
 // fetchSpecs = ["+refs/heads/*:refs/remotes/origin/*", "+refs/pull/*/head:refs/remotes/origin/pr/*"]
 ```
 
+### Iterating Keys
+
+Enumerate keys across all scopes, or within a single scope:
+
+```go
+cfg := gitconfig.New()
+cfg.LoadAll(".")
+
+// All keys from all scopes, sorted and deduplicated
+for _, key := range cfg.Keys() {
+	fmt.Printf("%s=%s\n", key, cfg.Get(key))
+}
+
+// Keys matching a prefix
+for _, key := range cfg.List("remote.") {
+	fmt.Println(key)
+}
+
+// Keys and all their values of one specific scope
+if local, ok := cfg.Scope("local"); ok {
+	for key, values := range local.Entries() {
+		fmt.Printf("%s: %v\n", key, values)
+	}
+}
+```
+
+`Scope` accepts the same scope names as `GetFrom` (`env`, `worktree`, `local`,
+`global`, `system`, `preset`) and returns the live `*Config` of that scope.
+`Entries` returns a deep copy, so mutating it never changes the configuration.
+
 ## Known Limitations
 
 Current implementation has the following known limitations:
