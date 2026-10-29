@@ -32,7 +32,17 @@
 //   - EnvPrefix - Environment variable prefix (defaults to GIT_CONFIG)
 //
 // Note: For tests users will want to set `NoWrites = true` to avoid overwriting
-// their real configs.
+// their real configs. `NoWrites` is propagated to the global, local and
+// worktree scopes on LoadAll. To allow writes to a single scope only, override
+// the scope's own `NoWrites` flag after loading:
+//
+//	cfg := gitconfig.New()
+//	cfg.NoWrites = true
+//	cfg.LoadAll(".")
+//	if local, ok := cfg.Scope("local"); ok {
+//	  local.NoWrites = false
+//	}
+//	cfg.SetLocal("core.pager", "less") // persisted, other scopes stay untouched
 //
 // # Examples
 //
@@ -100,6 +110,9 @@
 //	cfg.Set("user.name", "John Doe")
 //	cfg.Set("user.email", "john@example.com")
 //	cfg.Write()  // Persist changes to disk
+//
+// Set and Unset already persist to disk. Write is only needed to persist
+// changes that were made while NoWrites was set, or to retry a failed write.
 //
 // ## Scope-Specific Writes
 //

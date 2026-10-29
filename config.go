@@ -35,7 +35,7 @@ var (
 // Fields:
 // - path: File path of this config file
 // - readonly: If true, prevents any modifications (even in-memory)
-// - noWrites: If true, prevents persisting changes to disk (useful for testing)
+// - NoWrites: If true, prevents persisting changes to disk (useful for testing)
 // - raw: Maintains the raw text representation for round-trip fidelity
 // - vars: Map of normalized keys to their values (may be multiple values per key)
 // - branch: Current git branch name (for onbranch conditionals)
@@ -49,13 +49,22 @@ var (
 //	if err != nil { ... }
 //	value, ok := cfg.Get("core.editor")
 //	if err := cfg.Set("core.pager", "less"); err != nil { ... }
+//	if err := cfg.Write(); err != nil { ... }
 type Config struct {
 	path     string
 	readonly bool // do not allow modifying values (even in memory)
-	noWrites bool // do not persist changes to disk (e.g. for tests)
 	raw      strings.Builder
 	vars     map[string][]string
 	branch   string
+
+	// NoWrites prevents persisting changes to disk when set to true. Set and
+	// Unset still update the in-memory representation, but Write (and the
+	// implicit write performed by Set and Unset) becomes a no-op. This is
+	// useful for tests that must not touch the user's real config files.
+	//
+	// Note that a Config obtained from Configs inherits the value of
+	// Configs.NoWrites when the configs are loaded.
+	NoWrites bool
 }
 
 // IsEmpty returns true if the config is empty (no configuration loaded).
@@ -451,9 +460,37 @@ func (c *Config) rewriteRaw(key, value string, cb parseFunc) error {
 	return c.flushRaw()
 }
 
+// Write persists the current in-memory representation of the config to disk.
+//
+// Set and Unset already write to disk implicitly, so Write is only needed to
+// persist changes that were made while NoWrites was set, or to retry a write
+// that previously failed. It is a no-op if NoWrites is set or the config has
+// no path.
+//
+// Errors:
+// - Returns error if the config directory or file cannot be written
+//
+// Example:
+//
+//	cfg, err := gitconfig.LoadConfig(".git/config")
+//	if err != nil {
+//	  log.Fatal(err)
+//	}
+//	cfg.NoWrites = true // modify in memory only
+//	if err := cfg.Set("core.pager", "less"); err != nil {
+//	  log.Fatal(err)
+//	}
+//	cfg.NoWrites = false
+//	if err := cfg.Write(); err != nil { // persist the change
+//	  log.Fatal(err)
+//	}
+func (c *Config) Write() error {
+	return c.flushRaw()
+}
+
 func (c *Config) flushRaw() error {
-	if c.noWrites || c.path == "" {
-		debug.V(3).Log("not writing changes to disk (noWrites %t, path %q)", c.noWrites, c.path)
+	if c.NoWrites || c.path == "" {
+		debug.V(3).Log("not writing changes to disk (noWrites %t, path %q)", c.NoWrites, c.path)
 
 		return nil
 	}
@@ -882,7 +919,7 @@ func loadConfig(fn string) (*Config, error) {
 
 // mergeConfigs merge two configs, using first config as a base config extending it with vars, raw fields from the latter.
 func mergeConfigs(base *Config, extension *Config) *Config {
-	newConfig := Config{path: base.path, readonly: base.readonly, noWrites: base.noWrites, raw: strings.Builder{}, vars: map[string][]string{}}
+	newConfig := Config{path: base.path, readonly: base.readonly, NoWrites: base.NoWrites, raw: strings.Builder{}, vars: map[string][]string{}}
 	newConfig.raw.WriteString(base.raw.String())
 	// Note: We can not append the included config raw to the base config raw, because it will
 	// write the included config to the base config file when we write the base config.
@@ -955,13 +992,13 @@ func ParseConfig(r io.Reader) *Config {
 // Either way it will not be writeable.
 func LoadConfigFromEnv(envPrefix string) *Config {
 	c := &Config{
-		noWrites: true,
+		NoWrites: true,
 	}
 
 	count, err := strconv.Atoi(os.Getenv(envPrefix + "_COUNT"))
 	if err != nil || count < 1 {
 		return &Config{
-			noWrites: true,
+			NoWrites: true,
 		}
 	}
 
@@ -976,7 +1013,7 @@ func LoadConfigFromEnv(envPrefix string) *Config {
 
 		if key == "" || !found {
 			return &Config{
-				noWrites: true,
+				NoWrites: true,
 			}
 		}
 

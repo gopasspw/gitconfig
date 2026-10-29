@@ -69,7 +69,7 @@ type Config struct {
 - `LoadConfig(path)` - Load from file
 - `Get(key)` / `GetAll(key)` - Read values
 - `Set(key, value)` - Write values
-- `Write()` - Persist changes
+- `Write()` - Persist changes explicitly (Set and Unset already persist)
 
 #### 2. Configs (Multi-Scope)
 
