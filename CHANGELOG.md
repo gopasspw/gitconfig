@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and values of a single config scope
 - `Configs.Scope()` to access the `*Config` of a named scope, e.g. to iterate
   its keys via `Keys()` or `Entries()`
+- `Config.Sort()` and `Configs.Sort()` with `SortOptions` to optionally reorder
+  sections and keys when writing, e.g. to group all `[remote "..."]` sections
+  or to sort keys within a section. Sorting stays opt-in to preserve the
+  original file order by default.
 
 ### Changed
 

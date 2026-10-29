@@ -114,6 +114,24 @@
 // Set and Unset already persist to disk. Write is only needed to persist
 // changes that were made while NoWrites was set, or to retry a failed write.
 //
+// ## Reordering Sections and Keys
+//
+// By default the library preserves the order of the original file, like the
+// git CLI does. Sorting is opt-in via Sort and SortOptions:
+//
+//	cfg, _ := gitconfig.LoadConfig(".git/config")
+//	err := cfg.Sort(gitconfig.SortOptions{
+//		GroupSections: true, // keep all [remote "..."] sections together
+//		SortKeys:      true, // sort keys within each section
+//	})
+//
+// SortSections additionally sorts the sections alphabetically. Multi-valued
+// keys keep their relative order and comments directly above a key move with
+// it. Configs.Sort applies the same options to all writable scopes.
+//
+// Note that reordering can change the effective configuration, since the order
+// of multi-valued keys and of include directives matters.
+//
 // ## Scope-Specific Writes
 //
 // Write to specific scopes in multi-scope configs:
