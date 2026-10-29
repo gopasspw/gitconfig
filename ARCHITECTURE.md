@@ -83,7 +83,7 @@ Special considerations:
 
 - Parse a single config file
 - Maintain both parsed representation (`vars` map) and raw text representation  
-- Support reading (Get, GetAll, IsSet)
+- Support reading (Get, GetAll, IsSet, Keys, List, Entries)
 - Support writing (Set, Unset)
 - Preserve formatting during modifications
 
@@ -331,6 +331,10 @@ func (tc *ThreadSafeConfig) Get(key string) (string, bool) {
 | Set(key) | O(n) | n = file size (rewrite required) |
 | Unset(key) | O(n) | n = file size |
 | IsSet(key) | O(1) | Map lookup |
+| Keys() | O(k log k) | k = number of keys (sorting) |
+| List(prefix) | O(k log k) | k = number of keys (sorting) |
+| Entries() | O(k) | k = number of keys (deep copy) |
+| Scope(name) | O(1) | Field lookup |
 | LoadAll() | O(m) | m = number of config files |
 
 ### Space Complexity

@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Config.Keys()`, `Config.List()` and `Config.Entries()` to iterate the keys
+  and values of a single config scope
+- `Configs.Scope()` to access the `*Config` of a named scope, e.g. to iterate
+  its keys via `Keys()` or `Entries()`
+
 ### Changed
+
+- `Config.GetAll()` now returns a copy of the value slice instead of a reference
+  to the internal data structure
 
 ### Fixed
 

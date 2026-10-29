@@ -145,6 +145,112 @@ func TestInsertMultipleSameKey(t *testing.T) {
 `, c.raw.String())
 }
 
+func TestConfigKeys(t *testing.T) {
+	t.Parallel()
+
+	c := ParseConfig(strings.NewReader(configSampleGopass))
+	c.noWrites = true
+
+	assert.Equal(t, []string{
+		"core.autoimport",
+		"core.cliptimeout",
+		"core.editor",
+		"core.exportkeys",
+		"core.notifications",
+		"core.pager",
+		"domain-alias.foo.com.insteadof",
+		"generate.autoclip",
+		"mounts.foo/sub.path",
+		"mounts.path",
+		"mounts.work.path",
+		"show.safecontent",
+	}, c.Keys())
+
+	assert.Equal(t, []string{
+		"mounts.foo/sub.path",
+		"mounts.path",
+		"mounts.work.path",
+	}, c.List("mounts."))
+
+	assert.Empty(t, c.List("does-not-exist."))
+	assert.Len(t, c.List(""), len(c.Keys()))
+}
+
+func TestConfigKeysEmpty(t *testing.T) {
+	t.Parallel()
+
+	// zero value config / nil vars
+	c := &Config{}
+	assert.Equal(t, []string{}, c.Keys())
+	assert.Equal(t, []string{}, c.List(""))
+	assert.Empty(t, c.Entries())
+
+	// nil receiver must not panic
+	var nilCfg *Config
+	assert.Equal(t, []string{}, nilCfg.Keys())
+	assert.Equal(t, []string{}, nilCfg.List(""))
+	assert.Empty(t, nilCfg.Entries())
+}
+
+func TestConfigKeysMultiValue(t *testing.T) {
+	t.Parallel()
+
+	c := ParseConfig(strings.NewReader(configSampleGopass))
+	c.noWrites = true
+
+	// a multi-value key is listed only once
+	keys := c.Keys()
+	seen := 0
+	for _, k := range keys {
+		if k == "domain-alias.foo.com.insteadof" {
+			seen++
+		}
+	}
+	assert.Equal(t, 1, seen)
+}
+
+func TestConfigEntriesIsCopy(t *testing.T) {
+	t.Parallel()
+
+	c := ParseConfig(strings.NewReader(configSampleGopass))
+	c.noWrites = true
+
+	entries := c.Entries()
+	// keys are canonical, i.e. section and key name are lowercased while the
+	// subsection retains its case
+	require.Equal(t, []string{"foo.de", "foo.it"}, entries["domain-alias.foo.com.insteadof"])
+
+	// modifying the returned map or value slices must not affect the Config
+	entries["core.editor"][0] = "emacs"
+	entries["injected.key"] = []string{"value"}
+	delete(entries, "generate.autoclip")
+
+	editor, ok := c.Get("core.editor")
+	require.True(t, ok)
+	assert.Equal(t, "vim", editor)
+	assert.False(t, c.IsSet("injected.key"))
+	assert.True(t, c.IsSet("generate.autoclip"))
+
+	vs, ok := c.GetAll("domain-alias.foo.com.insteadOf")
+	require.True(t, ok)
+	assert.Equal(t, []string{"foo.de", "foo.it"}, vs)
+}
+
+func TestConfigGetAllIsCopy(t *testing.T) {
+	t.Parallel()
+
+	c := ParseConfig(strings.NewReader(configSampleGopass))
+	c.noWrites = true
+
+	vs, ok := c.GetAll("domain-alias.foo.com.insteadOf")
+	require.True(t, ok)
+	vs[0] = "mutated"
+
+	again, ok := c.GetAll("domain-alias.foo.com.insteadOf")
+	require.True(t, ok)
+	assert.Equal(t, []string{"foo.de", "foo.it"}, again)
+}
+
 func TestGetAll(t *testing.T) {
 	t.Parallel()
 

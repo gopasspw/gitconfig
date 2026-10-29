@@ -103,6 +103,24 @@ Shows how gitconfig handles include directives for modular configuration.
 go run -tags=examples examples/06-includes.go
 ```
 
+### 7. [Iterating Keys](07-iterate-keys.go)
+
+Shows how to enumerate configuration keys across all scopes or within a single scope.
+
+**Topics:**
+
+- Listing all keys with `Configs.Keys()`
+- Prefix filtering with `Configs.List()`
+- Accessing a single scope with `Configs.Scope()`
+- Iterating keys and values with `Config.Keys()` and `Config.Entries()`
+- Copy semantics of `Config.Entries()`
+
+**Run:**
+
+```bash
+go run -tags=examples examples/07-iterate-keys.go
+```
+
 ## Prerequisites
 
 Before running these examples, ensure you have Go 1.24 or later installed:
@@ -129,6 +147,7 @@ Recommended order for learning:
 4. Explore flexibility with **04-custom-paths**
 5. Master error handling with **05-error-handling**
 6. Build modular configs with **06-includes**
+7. Enumerate keys with **07-iterate-keys**
 
 ## Common Patterns
 
