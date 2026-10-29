@@ -437,7 +437,7 @@ func TestLoadConfigWithWorkdir(t *testing.T) {
 	assert.Equal(t, "Test", name)
 }
 
-// TestConfigWithNoWrites tests noWrites flag.
+// TestConfigWithNoWrites tests NoWrites flag.
 func TestConfigWithNoWrites(t *testing.T) {
 	t.Parallel()
 
@@ -451,16 +451,53 @@ func TestConfigWithNoWrites(t *testing.T) {
 	cfg, err := LoadConfig(configPath)
 	require.NoError(t, err)
 
-	// Set noWrites flag
-	cfg.noWrites = true
+	// Set NoWrites flag
+	cfg.NoWrites = true
 
 	// Try to set and flush
 	_ = cfg.Set("user.name", "Modified")
 	_ = cfg.flushRaw()
 
-	// With noWrites, flushRaw should silently skip the write
+	// With NoWrites, flushRaw should silently skip the write
 	// File should still have original content
 	fileContent, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 	assert.Contains(t, string(fileContent), "Original")
+}
+
+// TestConfigWrite tests the exported Write method on a single scope.
+func TestConfigWrite(t *testing.T) {
+	t.Parallel()
+
+	td := t.TempDir()
+	configPath := filepath.Join(td, "config")
+
+	require.NoError(t, os.WriteFile(configPath, []byte("[user]\n\tname = Original\n"), 0o644))
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// NoWrites defers the write to an explicit Write call
+	cfg.NoWrites = true
+	require.NoError(t, cfg.Set("user.name", "Modified"))
+
+	fileContent, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(fileContent), "Original")
+
+	cfg.NoWrites = false
+	require.NoError(t, cfg.Write())
+
+	fileContent, err = os.ReadFile(configPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(fileContent), "Modified")
+	assert.NotContains(t, string(fileContent), "Original")
+}
+
+// TestConfigWriteNoPath tests that Write is a no-op for configs without a path.
+func TestConfigWriteNoPath(t *testing.T) {
+	t.Parallel()
+
+	cfg := NewFromMap(map[string]string{"core.foo": "bar"})
+	require.NoError(t, cfg.Write())
 }

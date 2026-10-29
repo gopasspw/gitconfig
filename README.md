@@ -136,6 +136,29 @@ localCfg.Set("branch.main.remote", "origin")
 localCfg.Write()
 ```
 
+`Set` and `Unset` already persist to disk. `Write` is only needed to persist
+changes made while `NoWrites` was set, or to retry a failed write.
+
+### Controlling Writes per Scope
+
+`Configs.NoWrites` is propagated to the global, local and worktree scopes when
+the configs are loaded. To allow writes to a single scope only, override that
+scope's own `NoWrites` flag:
+
+```go
+cfg := gitconfig.New()
+cfg.NoWrites = true
+cfg.LoadAll(".")
+
+// Allow writes to the local config only
+if local, ok := cfg.Scope("local"); ok {
+    local.NoWrites = false
+}
+
+cfg.SetLocal("core.pager", "less") // persisted
+cfg.SetGlobal("core.pager", "less") // in memory only
+```
+
 ## Customization for Your Application
 
 Applications like `gopass` can easily customize file paths and environment variable prefixes:
@@ -166,7 +189,7 @@ cfg.LoadAll(".")
 - **LocalConfig** - Filename for repository-local config
 - **WorktreeConfig** - Filename for worktree-specific config (or `""` to disable)
 - **EnvPrefix** - Prefix for environment variables (e.g., `MYAPP_CONFIG`)
-- **NoWrites** - Set to true to prevent Write() from modifying files (useful for testing)
+- **NoWrites** - Set to true to prevent writes to disk (useful for testing). Propagated to the global, local and worktree scopes on `LoadAll`; individual scopes can override it via `Config.NoWrites`
 
 ## Advanced Features
 

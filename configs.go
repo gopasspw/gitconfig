@@ -26,13 +26,17 @@ import (
 // 6. Preset/built-in defaults
 //
 // Fields:
-// - Preset: Built-in default configuration (optional)
-// - system, global, local, worktree, env: Config objects for each scope
-// - workdir: Working directory (used to locate local and worktree configs)
-// - Name: Configuration set name (e.g., "git" or "gopass")
-// - SystemConfig, GlobalConfig, LocalConfig, WorktreeConfig: File paths
-// - EnvPrefix: Prefix for environment variables (e.g., "GIT_CONFIG")
-// - NoWrites: If true, prevents all writes to disk
+//   - Preset: Built-in default configuration (optional)
+//   - system, global, local, worktree, env: Config objects for each scope
+//   - workdir: Working directory (used to locate local and worktree configs)
+//   - Name: Configuration set name (e.g., "git" or "gopass")
+//   - SystemConfig, GlobalConfig, LocalConfig, WorktreeConfig: File paths
+//   - EnvPrefix: Prefix for environment variables (e.g., "GIT_CONFIG")
+//   - NoWrites: If true, prevents all writes to disk. It is propagated to the
+//     global, local and worktree scopes on LoadAll. Individual scopes can be
+//     overridden afterwards via Config.NoWrites, e.g. to allow writes to the
+//     local config only. Changing NoWrites after LoadAll does not affect the
+//     already loaded scopes; set Config.NoWrites on the scope instead.
 //
 // Usage:
 //
@@ -40,6 +44,16 @@ import (
 //	cfg.LoadAll(".")  // Load from current directory
 //	value := cfg.Get("core.editor")  // Reads from all scopes
 //	cfg.SetLocal("core.pager", "less")  // Write to local only
+//
+// To allow writes to a single scope only, override the scope's NoWrites flag:
+//
+//	cfg := New()
+//	cfg.NoWrites = true
+//	cfg.LoadAll(".")
+//	if local, ok := cfg.Scope("local"); ok {
+//	  local.NoWrites = false
+//	}
+//	cfg.SetLocal("core.pager", "less")  // persisted, other scopes stay untouched
 type Configs struct {
 	Preset   *Config
 	system   *Config
@@ -88,7 +102,7 @@ func New() *Configs {
 		local:    &Config{},
 		worktree: &Config{},
 		env: &Config{
-			noWrites: true,
+			NoWrites: true,
 		},
 
 		Name:           name,
@@ -154,7 +168,6 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 
 	// load the "global" (per user) config, if any
 	cs.loadGlobalConfigs()
-	cs.global.noWrites = cs.NoWrites
 
 	// load the local config, if any
 	if workdir != "" {
@@ -169,7 +182,6 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 			cs.local = c
 		}
 	}
-	cs.local.noWrites = cs.NoWrites
 
 	// load the worktree config, if any
 	if workdir != "" {
@@ -184,12 +196,25 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 			cs.worktree = c
 		}
 	}
-	cs.worktree.noWrites = cs.NoWrites
 
 	// load any env vars
 	cs.env = LoadConfigFromEnv(cs.EnvPrefix)
 
+	cs.applyNoWrites()
+
 	return cs
+}
+
+// applyNoWrites propagates the Configs-level NoWrites flag to the writable
+// scopes. It is called at the end of LoadAll. Changing Configs.NoWrites after
+// loading does not affect the already loaded scopes; set Config.NoWrites on
+// the individual scope instead.
+func (cs *Configs) applyNoWrites() {
+	for _, cfg := range []*Config{cs.global, cs.local, cs.worktree} {
+		if cfg != nil {
+			cfg.NoWrites = cs.NoWrites
+		}
+	}
 }
 
 // globalConfigFile returns the path to the global (per-user) config file using XDG base directory spec.
@@ -498,7 +523,7 @@ func (cs *Configs) SetGlobal(key, value string) error {
 func (cs *Configs) SetEnv(key, value string) error {
 	if cs.env == nil {
 		cs.env = &Config{
-			noWrites: true,
+			NoWrites: true,
 		}
 	}
 
@@ -521,6 +546,39 @@ func (cs *Configs) UnsetGlobal(key string) error {
 	}
 
 	return cs.global.Unset(key)
+}
+
+// Write persists all writable scopes to disk.
+//
+// Set and Unset already write to disk implicitly, so Write is mainly useful to
+// persist changes made while a scope's NoWrites was set, or to retry a failed
+// write. Read-only scopes (system, env, preset) are skipped, as are scopes
+// with NoWrites set.
+//
+// Example:
+//
+//	cfg := gitconfig.New()
+//	cfg.NoWrites = true
+//	cfg.LoadAll(".")
+//	cfg.SetLocal("core.pager", "less") // in memory only
+//	if local, ok := cfg.Scope("local"); ok {
+//	  local.NoWrites = false
+//	}
+//	if err := cfg.Write(); err != nil { // persist the local change
+//	  log.Fatal(err)
+//	}
+func (cs *Configs) Write() error {
+	for _, cfg := range []*Config{cs.worktree, cs.local, cs.global} {
+		if cfg == nil || cfg.readonly {
+			continue
+		}
+
+		if err := cfg.Write(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Keys returns a list of all keys from all available scopes. Every key has section and possibly

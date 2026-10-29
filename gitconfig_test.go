@@ -292,7 +292,7 @@ func TestGopassSingleRead(t *testing.T) {
 	c := &Configs{
 		global: ParseConfig(strings.NewReader(configSampleGopass)),
 	}
-	c.global.noWrites = true
+	c.global.NoWrites = true
 
 	assert.Equal(t, "true", c.Get("generate.autoclip"))
 	assert.Equal(t, "true", c.Get("core.autoimport"))
@@ -424,7 +424,7 @@ func TestSet(t *testing.T) {
 	t.Parallel()
 
 	c := ParseConfig(strings.NewReader(configSampleDocs))
-	c.noWrites = true
+	c.NoWrites = true
 	require.NoError(t, c.Set("core.gitproxy", "foobar"))
 	want := strings.ReplaceAll(configSampleDocs, "default-proxy", "foobar")
 	assert.Equal(t, want, c.raw.String())
@@ -434,7 +434,7 @@ func TestUnset(t *testing.T) {
 	t.Parallel()
 
 	c := ParseConfig(strings.NewReader(configSampleDocs))
-	c.noWrites = true
+	c.NoWrites = true
 	require.NoError(t, c.Unset("core.filemode"))
 	want := `#
 # This is the config file, and
@@ -472,7 +472,7 @@ func TestSetEmptyConfig(t *testing.T) {
 	td := t.TempDir()
 	c := &Config{
 		path:     filepath.Join(td, "config"),
-		noWrites: false,
+		NoWrites: false,
 	}
 	require.Error(t, c.Set("foobar", "baz"))
 	require.NoError(t, c.Set("foo.bar", "baz"))
@@ -492,7 +492,7 @@ func TestList(t *testing.T) {
 	c := &Configs{
 		global: ParseConfig(strings.NewReader(configSampleGopass)),
 	}
-	c.global.noWrites = true
+	c.global.NoWrites = true
 	assert.Equal(t, []string{
 		"mounts.foo/sub.path",
 		"mounts.path",
@@ -504,7 +504,7 @@ func TestListSections(t *testing.T) {
 	t.Parallel()
 
 	c := &Configs{global: ParseConfig(strings.NewReader(configSampleGopass))}
-	c.global.noWrites = true
+	c.global.NoWrites = true
 	assert.Equal(t, []string{"core", "domain-alias", "generate", "mounts", "show"}, c.ListSections())
 }
 
@@ -512,7 +512,7 @@ func TestListSubsections(t *testing.T) {
 	t.Parallel()
 
 	c := &Configs{global: ParseConfig(strings.NewReader(configSampleGopass))}
-	c.global.noWrites = true
+	c.global.NoWrites = true
 	assert.Equal(t, []string{"foo/sub", "work"}, c.ListSubsections("mounts"))
 }
 

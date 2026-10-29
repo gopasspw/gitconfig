@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Config.Write()` to explicitly persist a single config scope to disk
+- `Config.NoWrites` to control write behavior per scope, e.g. to allow writes
+  to the local config while `Configs.NoWrites` is set
+- `Configs.Write()` to persist all writable scopes at once
 - `Config.Keys()`, `Config.List()` and `Config.Entries()` to iterate the keys
   and values of a single config scope
 - `Configs.Scope()` to access the `*Config` of a named scope, e.g. to iterate

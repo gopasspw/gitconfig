@@ -62,7 +62,7 @@ func BenchmarkSet(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	cfg.noWrites = true
+	cfg.NoWrites = true
 
 	b.ResetTimer()
 

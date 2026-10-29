@@ -21,7 +21,7 @@ func TestInsertOnce(t *testing.T) {
 	t.Parallel()
 
 	c := &Config{
-		noWrites: true,
+		NoWrites: true,
 	}
 
 	require.NoError(t, c.insertValue("foo.bar", "baz"))
@@ -132,7 +132,7 @@ func TestInsertMultipleSameKey(t *testing.T) {
 	t.Parallel()
 
 	c := &Config{
-		noWrites: true,
+		NoWrites: true,
 	}
 
 	require.NoError(t, c.Set("foo.bar", "baz"))
@@ -149,7 +149,7 @@ func TestConfigKeys(t *testing.T) {
 	t.Parallel()
 
 	c := ParseConfig(strings.NewReader(configSampleGopass))
-	c.noWrites = true
+	c.NoWrites = true
 
 	assert.Equal(t, []string{
 		"core.autoimport",
@@ -196,7 +196,7 @@ func TestConfigKeysMultiValue(t *testing.T) {
 	t.Parallel()
 
 	c := ParseConfig(strings.NewReader(configSampleGopass))
-	c.noWrites = true
+	c.NoWrites = true
 
 	// a multi-value key is listed only once
 	keys := c.Keys()
@@ -213,7 +213,7 @@ func TestConfigEntriesIsCopy(t *testing.T) {
 	t.Parallel()
 
 	c := ParseConfig(strings.NewReader(configSampleGopass))
-	c.noWrites = true
+	c.NoWrites = true
 
 	entries := c.Entries()
 	// keys are canonical, i.e. section and key name are lowercased while the
@@ -240,7 +240,7 @@ func TestConfigGetAllIsCopy(t *testing.T) {
 	t.Parallel()
 
 	c := ParseConfig(strings.NewReader(configSampleGopass))
-	c.noWrites = true
+	c.NoWrites = true
 
 	vs, ok := c.GetAll("domain-alias.foo.com.insteadOf")
 	require.True(t, ok)
@@ -288,7 +288,7 @@ func TestSubsection(t *testing.T) {
 	foo = bar
 `
 	c := ParseConfig(strings.NewReader(in))
-	c.noWrites = true
+	c.NoWrites = true
 
 	assert.Equal(t, []string{"bar"}, c.vars["aliases.subsection with spaces.foo"])
 }
@@ -328,7 +328,7 @@ func TestInsertMultiple(t *testing.T) {
 	t.Parallel()
 
 	c := &Config{
-		noWrites: true,
+		NoWrites: true,
 	}
 
 	updates := map[string]string{
@@ -360,7 +360,7 @@ func TestRewriteRaw(t *testing.T) {
 	path = /tmp/foo
 `
 	c := ParseConfig(strings.NewReader(in))
-	c.noWrites = true
+	c.NoWrites = true
 
 	updates := map[string]string{
 		"foo.bar":          "baz",
@@ -398,7 +398,7 @@ func TestUnsetSection(t *testing.T) {
 	bar = baz
 `
 	c := ParseConfig(strings.NewReader(in))
-	c.noWrites = true
+	c.NoWrites = true
 
 	require.NoError(t, c.Unset("core.readonly"))
 	assert.Equal(t, `[core]
@@ -565,9 +565,9 @@ func TestGetPathsForNestedConfig(t *testing.T) {
 func TestMergeConfigs(t *testing.T) {
 	t.Parallel()
 
-	baseConfig := Config{path: "/home/user/config", noWrites: true, readonly: true, raw: strings.Builder{}, vars: map[string][]string{"core.bar": {"1"}}}
+	baseConfig := Config{path: "/home/user/config", NoWrites: true, readonly: true, raw: strings.Builder{}, vars: map[string][]string{"core.bar": {"1"}}}
 	baseConfig.raw.WriteString("base")
-	extensionConfig := Config{path: "/home/user/config.foo", noWrites: false, readonly: false, raw: strings.Builder{}, vars: map[string][]string{"core.bar": {"2"}}}
+	extensionConfig := Config{path: "/home/user/config.foo", NoWrites: false, readonly: false, raw: strings.Builder{}, vars: map[string][]string{"core.bar": {"2"}}}
 	extensionConfig.raw.WriteString("foo")
 
 	mergedConfig := mergeConfigs(&baseConfig, &extensionConfig)
@@ -575,7 +575,7 @@ func TestMergeConfigs(t *testing.T) {
 	assert.NotSame(t, &baseConfig.raw, &mergedConfig.raw)
 	assert.NotSame(t, &extensionConfig, mergedConfig)
 	assert.NotSame(t, &extensionConfig.raw, &mergedConfig.raw)
-	assert.Equal(t, baseConfig.noWrites, mergedConfig.noWrites)
+	assert.Equal(t, baseConfig.NoWrites, mergedConfig.NoWrites)
 	assert.Equal(t, baseConfig.readonly, mergedConfig.readonly)
 	assert.Equal(t, baseConfig.path, mergedConfig.path)
 	assert.Equal(t, map[string][]string{"core.bar": {"1", "2"}}, mergedConfig.vars)

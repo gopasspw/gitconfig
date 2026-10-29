@@ -263,3 +263,101 @@ func TestGlobalConfigPaths(t *testing.T) {
 		assert.Equal(t, "xdg", c.Get("test.value"))
 	})
 }
+
+func TestConfigsNoWrites(t *testing.T) {
+	newConfigs := func(t *testing.T) (*Configs, string, string) {
+		t.Helper()
+
+		home := t.TempDir()
+		t.Setenv("GOPASS_HOMEDIR", home)
+		t.Setenv("GITCONFIG_TEST_NOSYSTEM", "1")
+
+		workdir := t.TempDir()
+
+		c := New()
+		c.EnvPrefix = "GITCONFIG_TEST"
+		c.GlobalConfig = "global"
+		c.LocalConfig = "local"
+		c.WorktreeConfig = "worktree"
+
+		writeTestConfig(t, filepath.Join(home, c.GlobalConfig), "global")
+		writeTestConfig(t, filepath.Join(workdir, c.LocalConfig), "local")
+		writeTestConfig(t, filepath.Join(workdir, c.WorktreeConfig), "worktree")
+
+		return c, workdir, home
+	}
+
+	t.Run("NoWrites is propagated to all scopes on load", func(t *testing.T) {
+		c, workdir, _ := newConfigs(t)
+		c.NoWrites = true
+		c.LoadAll(workdir)
+
+		for _, scope := range []string{"global", "local", "worktree"} {
+			cfg, ok := c.Scope(scope)
+			require.True(t, ok)
+			assert.True(t, cfg.NoWrites, "scope %s must inherit NoWrites", scope)
+		}
+
+		require.NoError(t, c.SetLocal("test.value", "changed"))
+
+		written, err := LoadConfig(filepath.Join(workdir, c.LocalConfig))
+		require.NoError(t, err)
+		v, ok := written.Get("test.value")
+		assert.True(t, ok)
+		assert.Equal(t, "local", v)
+	})
+
+	t.Run("a single scope can opt out of NoWrites", func(t *testing.T) {
+		c, workdir, home := newConfigs(t)
+		c.NoWrites = true
+		c.LoadAll(workdir)
+
+		local, ok := c.Scope("local")
+		require.True(t, ok)
+		local.NoWrites = false
+
+		require.NoError(t, c.SetLocal("test.value", "changed"))
+		require.NoError(t, c.SetGlobal("test.value", "changed"))
+
+		writtenLocal, err := LoadConfig(filepath.Join(workdir, c.LocalConfig))
+		require.NoError(t, err)
+		v, ok := writtenLocal.Get("test.value")
+		assert.True(t, ok)
+		assert.Equal(t, "changed", v)
+
+		writtenGlobal, err := LoadConfig(filepath.Join(home, c.GlobalConfig))
+		require.NoError(t, err)
+		v, ok = writtenGlobal.Get("test.value")
+		assert.True(t, ok)
+		assert.Equal(t, "global", v)
+	})
+
+	t.Run("Write persists deferred changes of all writable scopes", func(t *testing.T) {
+		c, workdir, home := newConfigs(t)
+		c.NoWrites = true
+		c.LoadAll(workdir)
+
+		require.NoError(t, c.SetLocal("test.value", "local-changed"))
+		require.NoError(t, c.SetGlobal("test.value", "global-changed"))
+
+		for _, scope := range []string{"global", "local"} {
+			cfg, ok := c.Scope(scope)
+			require.True(t, ok)
+			cfg.NoWrites = false
+		}
+
+		require.NoError(t, c.Write())
+
+		writtenLocal, err := LoadConfig(filepath.Join(workdir, c.LocalConfig))
+		require.NoError(t, err)
+		v, ok := writtenLocal.Get("test.value")
+		assert.True(t, ok)
+		assert.Equal(t, "local-changed", v)
+
+		writtenGlobal, err := LoadConfig(filepath.Join(home, c.GlobalConfig))
+		require.NoError(t, err)
+		v, ok = writtenGlobal.Get("test.value")
+		assert.True(t, ok)
+		assert.Equal(t, "global-changed", v)
+	})
+}
