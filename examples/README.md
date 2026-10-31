@@ -121,6 +121,23 @@ Shows how to enumerate configuration keys across all scopes or within a single s
 go run -tags=examples examples/07-iterate-keys.go
 ```
 
+### 8. [Reordering Sections and Keys](08-sort.go)
+
+Shows how to reorder the sections and keys of a config file.
+
+**Topics:**
+
+- Grouping sections with the same name via `SortOptions.GroupSections`
+- Sorting sections alphabetically via `SortOptions.SortSections`
+- Sorting keys within a section via `SortOptions.SortKeys`
+- Preserving comments and whitespace while reordering
+
+**Run:**
+
+```bash
+go run -tags=examples examples/08-sort.go
+```
+
 ## Prerequisites
 
 Before running these examples, ensure you have Go 1.24 or later installed:

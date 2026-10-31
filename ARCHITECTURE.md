@@ -243,6 +243,12 @@ This prevents silent surprises where Set() might write to unexpected scope based
 - File write is O(n) instead of O(1) (n = file size)
 - Acceptable because: config files are small (< 10KB typical), write frequency is low
 
+Reordering is therefore opt-in: `Config.Sort` and `Configs.Sort` accept
+`SortOptions` to group sections by name, sort sections alphabetically and/or
+sort keys within a section. The default remains "preserve the original order",
+which matches the git CLI. Sorting rewrites the raw representation by splitting
+it into section blocks, so comments and whitespace are retained.
+
 ### 3. Scope Separation in API
 
 **Decision:** Separate local/global/worktree in public API

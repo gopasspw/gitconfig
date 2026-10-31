@@ -139,6 +139,37 @@ localCfg.Write()
 `Set` and `Unset` already persist to disk. `Write` is only needed to persist
 changes made while `NoWrites` was set, or to retry a failed write.
 
+### Reordering Sections and Keys
+
+The library preserves the order of the original file by default, matching the
+git CLI. Reordering is opt-in:
+
+```go
+cfg, err := gitconfig.LoadConfig(".git/config")
+if err != nil {
+    log.Fatal(err)
+}
+
+err = cfg.Sort(gitconfig.SortOptions{
+    GroupSections: true, // keep all [remote "..."] sections together
+    SortKeys:      true, // sort keys within each section
+})
+```
+
+Available options:
+
+- **GroupSections** - Move all sections with the same name next to each other,
+  e.g. all `[remote "..."]` sections. The order in which section names first
+  appear is preserved.
+- **SortSections** - Sort sections alphabetically by section and subsection
+  name. Implies `GroupSections`.
+- **SortKeys** - Sort the keys within each section alphabetically. Multi-valued
+  keys keep their relative order and comments directly above a key move with it.
+
+`Configs.Sort` applies the same options to all writable scopes. Note that
+reordering can change the effective configuration, since the order of
+multi-valued keys and of `include` directives matters.
+
 ### Controlling Writes per Scope
 
 `Configs.NoWrites` is propagated to the global, local and worktree scopes when
