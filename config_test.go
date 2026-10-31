@@ -386,7 +386,7 @@ func TestRewriteRaw(t *testing.T) {
 `, c.raw.String())
 }
 
-func TestUnsetSection(t *testing.T) {
+func TestUnsetLeavesEmptySection(t *testing.T) {
 	t.Parallel()
 
 	in := `[core]
@@ -412,17 +412,209 @@ func TestUnsetSection(t *testing.T) {
 	// should not exist
 	require.NoError(t, c.Unset("foo.bla"))
 
-	// TODO: support remvoing sections
-	t.Skip("removing sections is not supported, yet")
-
 	require.NoError(t, c.Unset("foo.bar"))
 	assert.Equal(t, `[core]
-	showsafecontent = false
-	readonly = true
+	showsafecontent = true
 [mounts]
-	readonly = true
+	path = /tmp/foo
+[foo]
+`, c.raw.String())
+
+	// the now empty section can be pruned
+	require.NoError(t, c.PruneEmptySections())
+	assert.Equal(t, `[core]
+	showsafecontent = true
+[mounts]
 	path = /tmp/foo
 `, c.raw.String())
+}
+
+func TestUnsetSection(t *testing.T) {
+	t.Parallel()
+
+	in := `# preamble
+[core]
+	showsafecontent = true
+	readonly = true
+[remote "origin"]
+	url = https://example.com/origin
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[remote "github"]
+	url = https://github.com/gopasspw/gopass
+[foo]
+	bar = baz
+`
+	tests := []struct {
+		name    string
+		section string
+		want    string
+	}{
+		{
+			name:    "simple section",
+			section: "foo",
+			want: `# preamble
+[core]
+	showsafecontent = true
+	readonly = true
+[remote "origin"]
+	url = https://example.com/origin
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[remote "github"]
+	url = https://github.com/gopasspw/gopass
+`,
+		},
+		{
+			name:    "subsection",
+			section: "remote.origin",
+			want: `# preamble
+[core]
+	showsafecontent = true
+	readonly = true
+[remote "github"]
+	url = https://github.com/gopasspw/gopass
+[foo]
+	bar = baz
+`,
+		},
+		{
+			name:    "header form",
+			section: `[remote "github"]`,
+			want: `# preamble
+[core]
+	showsafecontent = true
+	readonly = true
+[remote "origin"]
+	url = https://example.com/origin
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[foo]
+	bar = baz
+`,
+		},
+		{
+			name:    "case insensitive section",
+			section: "CORE",
+			want: `# preamble
+[remote "origin"]
+	url = https://example.com/origin
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[remote "github"]
+	url = https://github.com/gopasspw/gopass
+[foo]
+	bar = baz
+`,
+		},
+		{
+			name:    "case sensitive subsection",
+			section: "remote.ORIGIN",
+			want: `# preamble
+[core]
+	showsafecontent = true
+	readonly = true
+[remote "origin"]
+	url = https://example.com/origin
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[remote "github"]
+	url = https://github.com/gopasspw/gopass
+[foo]
+	bar = baz
+`,
+		},
+		{
+			name:    "nonexistent section",
+			section: "doesnotexist",
+			want:    in,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := ParseConfig(strings.NewReader(in))
+			c.NoWrites = true
+
+			require.NoError(t, c.UnsetSection(tc.section))
+			assert.Equal(t, tc.want, c.raw.String())
+
+			// the keys of the removed section must be gone from vars, too
+			for _, k := range c.Keys() {
+				s, sub, _ := splitKey(k)
+				wSection, wSubsection, ok := splitSection(tc.section)
+				require.True(t, ok)
+				assert.False(t, strings.EqualFold(s, wSection) && sub == wSubsection, k)
+			}
+		})
+	}
+}
+
+func TestUnsetSectionErrors(t *testing.T) {
+	t.Parallel()
+
+	c := ParseConfig(strings.NewReader("[core]\n\tfoo = bar\n"))
+	c.NoWrites = true
+
+	require.ErrorIs(t, c.UnsetSection(""), ErrInvalidKey)
+	require.ErrorIs(t, c.UnsetSection("[]"), ErrInvalidKey)
+
+	// readonly configs are not modified
+	c.readonly = true
+	require.NoError(t, c.UnsetSection("core"))
+	assert.Equal(t, "[core]\n\tfoo = bar\n", c.raw.String())
+}
+
+func TestPruneEmptySections(t *testing.T) {
+	t.Parallel()
+
+	in := `# preamble
+[core]
+	showsafecontent = true
+[empty]
+[empty "sub"]
+	# a comment that must survive
+[foo]
+	bar = baz
+`
+	c := ParseConfig(strings.NewReader(in))
+	c.NoWrites = true
+
+	require.NoError(t, c.PruneEmptySections())
+	assert.Equal(t, `# preamble
+[core]
+	showsafecontent = true
+	# a comment that must survive
+[foo]
+	bar = baz
+`, c.raw.String())
+
+	// pruning again is a no-op
+	require.NoError(t, c.PruneEmptySections())
+	assert.Equal(t, `# preamble
+[core]
+	showsafecontent = true
+	# a comment that must survive
+[foo]
+	bar = baz
+`, c.raw.String())
+
+	// readonly configs are not modified
+	c.readonly = true
+	require.NoError(t, c.PruneEmptySections())
+	assert.Equal(t, `# preamble
+[core]
+	showsafecontent = true
+	# a comment that must survive
+[foo]
+	bar = baz
+`, c.raw.String())
+}
+
+func TestPruneEmptySectionsAllEmpty(t *testing.T) {
+	t.Parallel()
+
+	c := ParseConfig(strings.NewReader("[empty]\n[alsoempty]\n"))
+	c.NoWrites = true
+
+	require.NoError(t, c.PruneEmptySections())
+	assert.Empty(t, c.raw.String())
 }
 
 func TestNewFromMap(t *testing.T) {

@@ -139,6 +139,35 @@ localCfg.Write()
 `Set` and `Unset` already persist to disk. `Write` is only needed to persist
 changes made while `NoWrites` was set, or to retry a failed write.
 
+### Removing Sections
+
+`Unset` removes individual keys and may leave an empty section header behind.
+To remove a whole section including all of its keys, use `UnsetSection`. To
+drop all sections that no longer contain any keys, use `PruneEmptySections`:
+
+```go
+cfg, err := gitconfig.LoadConfig(".git/config")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Remove [remote "origin"] and all of its keys
+if err := cfg.UnsetSection("remote.origin"); err != nil {
+    log.Fatal(err)
+}
+
+// Drop any remaining empty sections
+if err := cfg.PruneEmptySections(); err != nil {
+    log.Fatal(err)
+}
+```
+
+`UnsetSection` accepts `section`, `section.subsection` or a section header such
+as `[remote "origin"]`. Section names are matched case-insensitively, subsection
+names case-sensitively. `Configs.UnsetSectionLocal`, `Configs.UnsetSectionGlobal`
+and `Configs.PruneEmptySections` apply the same operations to the corresponding
+scopes.
+
 ### Reordering Sections and Keys
 
 The library preserves the order of the original file by default, matching the

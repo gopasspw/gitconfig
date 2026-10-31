@@ -548,6 +548,46 @@ func (cs *Configs) UnsetGlobal(key string) error {
 	return cs.global.Unset(key)
 }
 
+// UnsetSectionLocal deletes a whole section, including all of its keys, from
+// the local config. See Config.UnsetSection for the accepted section formats.
+func (cs *Configs) UnsetSectionLocal(section string) error {
+	if cs.local == nil {
+		return nil
+	}
+
+	return cs.local.UnsetSection(section)
+}
+
+// UnsetSectionGlobal deletes a whole section, including all of its keys, from
+// the global config. See Config.UnsetSection for the accepted section formats.
+func (cs *Configs) UnsetSectionGlobal(section string) error {
+	if cs.global == nil {
+		return nil
+	}
+
+	return cs.global.UnsetSection(section)
+}
+
+// PruneEmptySections removes all sections without any keys from all writable
+// scopes and persists the result. Read-only scopes (system, env, preset) are
+// skipped. Scopes with NoWrites set are pruned in memory only, like Write they
+// are not persisted.
+//
+// See Config.PruneEmptySections for details.
+func (cs *Configs) PruneEmptySections() error {
+	for _, cfg := range []*Config{cs.worktree, cs.local, cs.global} {
+		if cfg == nil || cfg.readonly {
+			continue
+		}
+
+		if err := cfg.PruneEmptySections(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Write persists all writable scopes to disk.
 //
 // Set and Unset already write to disk implicitly, so Write is mainly useful to

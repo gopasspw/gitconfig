@@ -78,6 +78,16 @@ func (c *Config) Sort(opts SortOptions) error {
 
 	blocks = orderBlocks(blocks, opts)
 
+	c.raw = strings.Builder{}
+	c.raw.WriteString(blocksToString(blocks))
+
+	debug.V(3).Log("sorted config: \n--------------\n%s\n--------------", c.raw.String())
+
+	return c.flushRaw()
+}
+
+// blocksToString serializes the given blocks back into the raw config format.
+func blocksToString(blocks []*configBlock) string {
 	var sb strings.Builder
 	for _, b := range blocks {
 		if b.header != "" {
@@ -96,12 +106,7 @@ func (c *Config) Sort(opts SortOptions) error {
 		}
 	}
 
-	c.raw = strings.Builder{}
-	c.raw.WriteString(sb.String())
-
-	debug.V(3).Log("sorted config: \n--------------\n%s\n--------------", c.raw.String())
-
-	return c.flushRaw()
+	return sb.String()
 }
 
 // configBlock is a single section of a config file, i.e. the section header

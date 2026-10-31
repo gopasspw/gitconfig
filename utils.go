@@ -59,6 +59,41 @@ func splitKey(key string) (section, subsection, skey string) { //nolint:nonamedr
 	return
 }
 
+// splitSection splits a section reference into its section and subsection
+// parts. It accepts both the dotted form used for keys and the header form
+// used in config files:
+//
+//	"core"                  -> ("core", "", true)
+//	"remote.origin"         -> ("remote", "origin", true)
+//	`[remote "origin"]`     -> ("remote", "origin", true)
+//	"remote.foo.bar"        -> ("remote", "foo.bar", true)
+//	""                      -> ("", "", false)
+//
+// The subsection may contain dots. The returned section is not lowercased,
+// callers should compare it case-insensitively.
+func splitSection(section string) (string, string, bool) { //nolint:nonamedreturns
+	section = strings.TrimSpace(section)
+	if section == "" {
+		return "", "", false
+	}
+
+	if strings.HasPrefix(section, "[") {
+		s, sub, skip := parseSectionHeader(section)
+		if skip {
+			return "", "", false
+		}
+
+		return s, sub, true
+	}
+
+	s, sub, _ := strings.Cut(section, ".")
+	if s == "" {
+		return "", "", false
+	}
+
+	return s, sub, true
+}
+
 // canonicalizeKey normalizes a gitconfig key according to git rules.
 //
 // Canonicalization rules (per git-config):

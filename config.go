@@ -95,7 +95,9 @@ func (c *Config) IsEmpty() bool {
 // - The underlying config file is updated if possible
 // - Readonly configs silently ignore the unset operation
 //
-// Note: Currently does not remove entire sections, only individual keys within sections.
+// Note: Unset only removes individual keys. If this leaves an empty section
+// behind, use PruneEmptySections to drop it, or UnsetSection to remove a whole
+// section at once.
 //
 // Example:
 //
@@ -124,6 +126,135 @@ func (c *Config) Unset(key string) error {
 	return c.rewriteRaw(key, "", func(fKey, key, value, comment, _ string) (string, bool) {
 		return "", true
 	})
+}
+
+// UnsetSection deletes a whole section, including all of its keys, from the
+// config.
+//
+// The section may be given as "section" or "section.subsection", e.g. "core"
+// or "remote.origin". A section header as it appears in the file, e.g.
+// `[remote "origin"]`, is accepted as well. Section names are matched
+// case-insensitively, subsection names case-sensitively, as usual for git
+// config. If the section appears multiple times in the file, all occurrences
+// are removed.
+//
+// Behavior:
+// - All keys of the section are removed from the in-memory representation
+// - All matching section headers and their keys are removed from the raw config
+// - If the section doesn't exist, this is a no-op (no error)
+// - Readonly configs silently ignore the operation
+// - The underlying config file is updated if possible
+//
+// Note: This only removes the section given by name. To remove all
+// subsections of a section, call UnsetSection for each of them, or use
+// PruneEmptySections after unsetting the individual keys.
+//
+// Example:
+//
+//	if err := cfg.UnsetSection("remote.origin"); err != nil {
+//	  log.Fatal(err)
+//	}
+func (c *Config) UnsetSection(section string) error {
+	if c.readonly {
+		return nil
+	}
+
+	wSection, wSubsection, ok := splitSection(section)
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrInvalidKey, section)
+	}
+
+	// remove all keys of the section from the in-memory representation
+	changed := false
+	for k := range c.vars {
+		s, sub, _ := splitKey(k)
+		if strings.EqualFold(s, wSection) && sub == wSubsection {
+			delete(c.vars, k)
+			changed = true
+		}
+	}
+
+	blocks := splitConfigBlocks(c.raw.String())
+	kept := make([]*configBlock, 0, len(blocks))
+	for _, b := range blocks {
+		if !b.preamble && strings.EqualFold(b.section, wSection) && b.subsection == wSubsection {
+			changed = true
+
+			continue
+		}
+		kept = append(kept, b)
+	}
+
+	if !changed {
+		return nil
+	}
+
+	c.raw = strings.Builder{}
+	c.raw.WriteString(blocksToString(kept))
+
+	return c.flushRaw()
+}
+
+// PruneEmptySections removes all sections that don't contain any keys from the
+// config. This is useful after unsetting individual keys, which may leave
+// empty section headers behind.
+//
+// Comments that were part of a removed section are preserved and moved to the
+// preceding section (or to the top of the file), so no user comments are lost.
+// Readonly configs silently ignore the operation, and NoWrites only prevents
+// persisting the result to disk.
+//
+// Example:
+//
+//	if err := cfg.Unset("remote.origin.url"); err != nil {
+//	  log.Fatal(err)
+//	}
+//	if err := cfg.PruneEmptySections(); err != nil { // drop the now empty [remote "origin"]
+//	  log.Fatal(err)
+//	}
+func (c *Config) PruneEmptySections() error {
+	if c.readonly {
+		return nil
+	}
+
+	blocks := splitConfigBlocks(c.raw.String())
+	kept := make([]*configBlock, 0, len(blocks))
+	changed := false
+	for _, b := range blocks {
+		if b.preamble || len(b.chunks) > 0 {
+			kept = append(kept, b)
+
+			continue
+		}
+
+		changed = true
+
+		// keep comments of the removed section, but drop blank lines
+		comments := make([]string, 0, len(b.trailing))
+		for _, line := range b.trailing {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
+				comments = append(comments, line)
+			}
+		}
+		if len(comments) == 0 {
+			continue
+		}
+		if len(kept) == 0 {
+			kept = append(kept, &configBlock{preamble: true})
+		}
+		prev := kept[len(kept)-1]
+		prev.trailing = append(prev.trailing, comments...)
+	}
+
+	if !changed {
+		return nil
+	}
+
+	c.raw = strings.Builder{}
+	c.raw.WriteString(blocksToString(kept))
+
+	return c.flushRaw()
 }
 
 // Get returns the first value of the key.
