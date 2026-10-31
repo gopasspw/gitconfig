@@ -129,11 +129,7 @@ type configBlock struct {
 
 // splitConfigBlocks splits the raw config into its sections.
 func splitConfigBlocks(raw string) []*configBlock {
-	lines := strings.Split(raw, "\n")
-	// the raw config always ends with a newline, so the last element is empty
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
+	lines := splitRawLines(raw)
 
 	blocks := make([]*configBlock, 0, 16)
 	cur := &configBlock{preamble: true}
