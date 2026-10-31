@@ -408,6 +408,11 @@ Git also supports conditional includes (gitconfig 2.13+):
 - Uses glob pattern matching (globMatch)
 - Conditional evaluated at load time
 - Only matching includes are processed
+- Supported conditions: `gitdir:`, `gitdir/i:`, `onbranch:` and
+  `hasconfig:remote.*.url:`
+- `hasconfig:remote.*.url:` is evaluated against the remote URLs of all config
+  scopes. The URLs are collected before any conditional include is evaluated,
+  so a condition can match a remote defined in another config file.
 
 ## Future Extensibility
 
