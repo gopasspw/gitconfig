@@ -138,6 +138,22 @@ Shows how to reorder the sections and keys of a config file.
 go run -tags=examples examples/08-sort.go
 ```
 
+### 9. [Removing Sections](09-remove-sections.go)
+
+Shows how to remove whole sections from a config file.
+
+**Topics:**
+
+- Removing a section and all of its keys via `Config.UnsetSection()`
+- Dropping empty sections via `Config.PruneEmptySections()`
+- Accepted section formats (`section`, `section.subsection`, `[section "subsection"]`)
+
+**Run:**
+
+```bash
+go run -tags=examples examples/09-remove-sections.go
+```
+
 ## Prerequisites
 
 Before running these examples, ensure you have Go 1.24 or later installed:
@@ -165,6 +181,8 @@ Recommended order for learning:
 5. Master error handling with **05-error-handling**
 6. Build modular configs with **06-includes**
 7. Enumerate keys with **07-iterate-keys**
+8. Reorder sections with **08-sort**
+9. Remove sections with **09-remove-sections**
 
 ## Common Patterns
 

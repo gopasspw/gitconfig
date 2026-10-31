@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sections and keys when writing, e.g. to group all `[remote "..."]` sections
   or to sort keys within a section. Sorting stays opt-in to preserve the
   original file order by default.
+- `Config.UnsetSection()` to remove a whole section including all of its keys,
+  and `Config.PruneEmptySections()` to drop sections that no longer contain any
+  keys. `Configs.UnsetSectionLocal()`, `Configs.UnsetSectionGlobal()` and
+  `Configs.PruneEmptySections()` provide the same functionality for the
+  corresponding scopes.
 
 ### Changed
 

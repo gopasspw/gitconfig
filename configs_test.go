@@ -171,6 +171,77 @@ func writeTestConfig(t *testing.T, path, value string) {
 	require.NoError(t, os.WriteFile(path, []byte("[test]\n\tvalue = "+value+"\n"), 0o600))
 }
 
+func TestConfigsUnsetSection(t *testing.T) {
+	td := t.TempDir()
+	t.Setenv("GOPASS_HOMEDIR", td)
+
+	c := New()
+	c.SystemConfig = filepath.Join(td, "system")
+	c.GlobalConfig = "global"
+	c.LocalConfig = "local"
+	c.WorktreeConfig = "worktree"
+	c.EnvPrefix = "GPTEST_CONFIG"
+
+	require.NoError(t, os.WriteFile(filepath.Join(td, c.GlobalConfig), []byte(`[global]
+	key = global
+[alias "foo"]
+	key = bar
+`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, c.LocalConfig), []byte(`[local]
+	key = local
+[alias "foo"]
+	key = bar
+`), 0o600))
+
+	c.LoadAll(td)
+
+	require.NoError(t, c.UnsetSectionLocal("alias.foo"))
+	assert.False(t, c.local.IsSet("alias.foo.key"))
+	assert.True(t, c.global.IsSet("alias.foo.key"))
+
+	require.NoError(t, c.UnsetSectionGlobal("alias.foo"))
+	assert.False(t, c.global.IsSet("alias.foo.key"))
+
+	// nil scopes are a no-op
+	c.local = nil
+	c.global = nil
+	require.NoError(t, c.UnsetSectionLocal("alias.foo"))
+	require.NoError(t, c.UnsetSectionGlobal("alias.foo"))
+}
+
+func TestConfigsPruneEmptySections(t *testing.T) {
+	td := t.TempDir()
+	t.Setenv("GOPASS_HOMEDIR", td)
+
+	c := New()
+	c.SystemConfig = filepath.Join(td, "system")
+	c.GlobalConfig = "global"
+	c.LocalConfig = "local"
+	c.WorktreeConfig = "worktree"
+	c.EnvPrefix = "GPTEST_CONFIG"
+
+	require.NoError(t, os.WriteFile(filepath.Join(td, c.GlobalConfig), []byte(`[global]
+	key = global
+[empty]
+`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, c.LocalConfig), []byte(`[local]
+	key = local
+[empty]
+`), 0o600))
+
+	c.LoadAll(td)
+
+	require.NoError(t, c.PruneEmptySections())
+
+	global, err := os.ReadFile(filepath.Join(td, c.GlobalConfig))
+	require.NoError(t, err)
+	assert.Equal(t, "[global]\n\tkey = global\n", string(global))
+
+	local, err := os.ReadFile(filepath.Join(td, c.LocalConfig))
+	require.NoError(t, err)
+	assert.Equal(t, "[local]\n\tkey = local\n", string(local))
+}
+
 func TestGlobalConfigPaths(t *testing.T) {
 	newConfigs := func(t *testing.T) (*Configs, string, string) {
 		t.Helper()

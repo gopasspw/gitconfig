@@ -140,6 +140,32 @@ func TestSplitKey(t *testing.T) {
 	}
 }
 
+func TestSplitSection(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		in         string
+		section    string
+		subsection string
+		ok         bool
+	}{
+		{in: "core", section: "core", ok: true},
+		{in: "remote.origin", section: "remote", subsection: "origin", ok: true},
+		{in: "remote.foo.bar", section: "remote", subsection: "foo.bar", ok: true},
+		{in: `[remote "origin"]`, section: "remote", subsection: "origin", ok: true},
+		{in: "[core]", section: "core", ok: true},
+		{in: "  core  ", section: "core", ok: true},
+		{in: "", ok: false},
+		{in: "[]", ok: false},
+		{in: ".foo", ok: false},
+	} {
+		sec, sub, ok := splitSection(tc.in)
+		assert.Equal(t, tc.ok, ok, tc.in)
+		assert.Equal(t, tc.section, sec, tc.in)
+		assert.Equal(t, tc.subsection, sub, tc.in)
+	}
+}
+
 // TestParseLineForComment tests the parseLineForComment function with various inputs.
 func TestParseLineForComment(t *testing.T) {
 	testCases := []struct {

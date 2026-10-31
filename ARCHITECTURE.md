@@ -186,6 +186,7 @@ This prevents silent surprises where Set() might write to unexpected scope based
 | Function | Purpose | Implementation |
 |----------|---------|-----------------|
 | `splitKey()` | Parse key into section, subsection, key | String splitting logic |
+| `splitSection()` | Parse a section reference (`core`, `remote.origin`, `[remote "origin"]`) | String splitting logic |
 | `canonicalizeKey()` | Normalize key per git rules | Case normalization |
 | `globMatch()` | Pattern matching for includes | gobwas/glob wrapper |
 | `parseLineForComment()` | Handle quoted strings in values | State machine parser |
@@ -248,6 +249,12 @@ Reordering is therefore opt-in: `Config.Sort` and `Configs.Sort` accept
 sort keys within a section. The default remains "preserve the original order",
 which matches the git CLI. Sorting rewrites the raw representation by splitting
 it into section blocks, so comments and whitespace are retained.
+
+The same block representation is used to remove sections: `Config.UnsetSection`
+drops a section header together with all of its keys, and
+`Config.PruneEmptySections` drops sections that no longer contain any keys while
+keeping their comments. `Unset` itself only removes individual keys, so it may
+leave an empty section header behind.
 
 ### 3. Scope Separation in API
 
@@ -336,6 +343,8 @@ func (tc *ThreadSafeConfig) Get(key string) (string, bool) {
 | GetAll(key) | O(1) | Map lookup |
 | Set(key) | O(n) | n = file size (rewrite required) |
 | Unset(key) | O(n) | n = file size |
+| UnsetSection(section) | O(n) | n = file size |
+| PruneEmptySections() | O(n) | n = file size |
 | IsSet(key) | O(1) | Map lookup |
 | Keys() | O(k log k) | k = number of keys (sorting) |
 | List(prefix) | O(k log k) | k = number of keys (sorting) |
