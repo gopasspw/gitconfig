@@ -649,6 +649,37 @@ func (cs *Configs) Sort(opts SortOptions) error {
 	return nil
 }
 
+// Format normalizes the layout of all writable scopes according to opts and
+// persists the result. Read-only scopes (system, env, preset) are skipped.
+// Scopes with NoWrites set are formatted in memory only, like Write they are
+// not persisted.
+//
+// See Config.Format for the available options.
+//
+// Example:
+//
+//	cfg := gitconfig.New()
+//	cfg.LoadAll(".")
+//	if err := cfg.Format(gitconfig.FormatOptions{
+//	  TrimTrailingWhitespace: true,
+//	  CollapseBlankLines:     true,
+//	}); err != nil {
+//	  log.Fatal(err)
+//	}
+func (cs *Configs) Format(opts FormatOptions) error {
+	for _, cfg := range []*Config{cs.worktree, cs.local, cs.global} {
+		if cfg == nil || cfg.readonly {
+			continue
+		}
+
+		if err := cfg.Format(opts); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Keys returns a list of all keys from all available scopes. Every key has section and possibly
 // a subsection. They are separated by dots. The subsection itself may contain dots. The final
 // key name and the section MUST NOT contain dots.

@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keys. `Configs.UnsetSectionLocal()`, `Configs.UnsetSectionGlobal()` and
   `Configs.PruneEmptySections()` provide the same functionality for the
   corresponding scopes.
+- `Config.Format()` and `Configs.Format()` with `FormatOptions` to optionally
+  normalize the layout of a config file, e.g. to collapse multiple blank lines
+  or to drop blank lines around section headers. Formatting stays opt-in and
+  off by default to preserve the original file layout.
 
 ### Changed
 

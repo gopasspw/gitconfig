@@ -199,6 +199,29 @@ Available options:
 reordering can change the effective configuration, since the order of
 multi-valued keys and of `include` directives matters.
 
+### Formatting the Layout
+
+`Format` normalizes the layout of a config file without changing any keys or
+values. Formatting is opt-in and off by default:
+
+```go
+cfg, err := gitconfig.LoadConfig(".git/config")
+if err != nil {
+    log.Fatal(err)
+}
+
+err = cfg.Format(gitconfig.FormatOptions{
+    TrimTrailingWhitespace:             true, // strip trailing spaces/tabs
+    CollapseBlankLines:                 true, // at most one blank line in a row
+    RemoveBlankLinesAfterSectionHeader: true, // no blank line after [section]
+    RemoveBlankLinesBeforeSectionHeader: true, // no blank line before [section]
+    TrimBlankLines:                     true, // no blank lines at file start/end
+})
+```
+
+Comments are always preserved. `Configs.Format` applies the same options to all
+writable scopes.
+
 ### Controlling Writes per Scope
 
 `Configs.NoWrites` is propagated to the global, local and worktree scopes when

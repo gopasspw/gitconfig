@@ -148,6 +148,23 @@
 // Note that reordering can change the effective configuration, since the order
 // of multi-valued keys and of include directives matters.
 //
+// ## Formatting the Layout
+//
+// Format normalizes the layout of a config file without touching the parsed
+// keys and values. Like sorting, formatting is opt-in and off by default:
+//
+//	cfg, _ := gitconfig.LoadConfig(".git/config")
+//	err := cfg.Format(gitconfig.FormatOptions{
+//		TrimTrailingWhitespace:             true, // strip trailing spaces/tabs
+//		CollapseBlankLines:                 true, // at most one blank line in a row
+//		RemoveBlankLinesAfterSectionHeader: true, // no blank line after [section]
+//		RemoveBlankLinesBeforeSectionHeader: true, // no blank line before [section]
+//		TrimBlankLines:                     true, // no blank lines at file start/end
+//	})
+//
+// Comments are always preserved. Configs.Format applies the same options to
+// all writable scopes.
+//
 // ## Scope-Specific Writes
 //
 // Write to specific scopes in multi-scope configs:

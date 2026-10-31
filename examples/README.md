@@ -154,6 +154,25 @@ Shows how to remove whole sections from a config file.
 go run -tags=examples examples/09-remove-sections.go
 ```
 
+### 10. [Formatting the Layout](10-format.go)
+
+Shows how to normalize the layout of a config file without changing any keys
+or values.
+
+**Topics:**
+
+- Removing trailing whitespace via `FormatOptions.TrimTrailingWhitespace`
+- Collapsing multiple blank lines via `FormatOptions.CollapseBlankLines`
+- Dropping blank lines around section headers
+- Trimming blank lines at the start and end of the file
+- Preserving comments while formatting
+
+**Run:**
+
+```bash
+go run -tags=examples examples/10-format.go
+```
+
 ## Prerequisites
 
 Before running these examples, ensure you have Go 1.24 or later installed:
@@ -183,6 +202,7 @@ Recommended order for learning:
 7. Enumerate keys with **07-iterate-keys**
 8. Reorder sections with **08-sort**
 9. Remove sections with **09-remove-sections**
+10. Normalize the layout with **10-format**
 
 ## Common Patterns
 
