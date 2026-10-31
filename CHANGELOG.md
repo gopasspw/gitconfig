@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.0.5] - 2026-10-31
+
+### Added
+
 - Support for `hasconfig:remote.*.url` conditional includes. The condition is
   evaluated against the remote URLs of all config scopes, matching git's
   behavior.
