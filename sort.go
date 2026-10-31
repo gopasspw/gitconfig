@@ -134,7 +134,7 @@ func splitConfigBlocks(raw string) []*configBlock {
 	cur := &configBlock{preamble: true}
 	blocks = append(blocks, cur)
 
-	var pending []string
+	pending := make([]string, 0, len(lines))
 
 	flushPending := func() {
 		if len(pending) == 0 {
