@@ -128,6 +128,89 @@ func TestConditionalIncludeGitDirI(t *testing.T) {
 	assert.Equal(t, []string{"7", "9"}, vs)
 }
 
+func TestConditionalIncludeHasConfigRemoteURL(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping test on windows")
+	}
+
+	td := t.TempDir()
+
+	// base config
+	fn := filepath.Join(td, "config")
+	require.NoError(t, os.WriteFile(fn, []byte(`[core]
+	int = 7
+[remote "origin"]
+	url = https://github.com/gopasspw/gitconfig.git
+[remote "work"]
+	url = git@github.com:example/work.git
+  [includeIf "hasconfig:remote.*.url:https://github.com/gopasspw/**"]
+	path = match.config
+  [includeIf "hasconfig:remote.*.url:git@example.com:**"]
+	path = nomatch.config`), 0o600))
+
+	// match.config, should be included
+	fnMatch := filepath.Join(td, "match.config")
+	require.NoError(t, os.WriteFile(fnMatch, []byte(`[core]
+	int = 8`), 0o600))
+
+	// nomatch.config, should NOT be included
+	fnNoMatch := filepath.Join(td, "nomatch.config")
+	require.NoError(t, os.WriteFile(fnNoMatch, []byte(`[core]
+	int = 9`), 0o600))
+
+	cfg, err := LoadConfig(fn)
+	require.NoError(t, err)
+	vs, ok := cfg.GetAll("core.int")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"7", "8"}, vs)
+}
+
+func TestConditionalIncludeHasConfigRemoteURLFromOtherScope(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping test on windows")
+	}
+
+	td := t.TempDir()
+	t.Setenv("GOPASS_HOMEDIR", td)
+
+	// the global config defines a condition that only matches a remote which
+	// is defined in the local config
+	globalPath := filepath.Join(td, "global")
+	require.NoError(t, os.WriteFile(globalPath, []byte(`[remote "origin"]
+	url = https://github.com/gopasspw/gitconfig.git
+  [includeIf "hasconfig:remote.*.url:https://github.com/gopasspw/**"]
+	path = global-match.config
+  [includeIf "hasconfig:remote.*.url:git@github.com:example/**"]
+	path = global-cross.config`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "global-match.config"), []byte(`[global]
+	matched = yes`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "global-cross.config"), []byte(`[global]
+	cross = yes`), 0o600))
+
+	// the local config defines a remote and a condition matching it
+	localPath := filepath.Join(td, "local")
+	require.NoError(t, os.WriteFile(localPath, []byte(`[remote "upstream"]
+	url = git@github.com:example/upstream.git
+  [includeIf "hasconfig:remote.*.url:git@github.com:example/**"]
+	path = local-match.config`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "local-match.config"), []byte(`[local]
+	matched = yes`), 0o600))
+
+	c := New()
+	c.SystemConfig = filepath.Join(td, "system")
+	c.GlobalConfig = "global"
+	c.LocalConfig = "local"
+	c.WorktreeConfig = "worktree"
+	c.EnvPrefix = "GPTEST_HASCONFIG"
+	c.LoadAll(td)
+
+	assert.Equal(t, "yes", c.GetGlobal("global.matched"))
+	assert.Equal(t, "yes", c.GetGlobal("global.cross"))
+	assert.Equal(t, "yes", c.GetLocal("local.matched"))
+}
+
 func TestInsertMultipleSameKey(t *testing.T) {
 	t.Parallel()
 

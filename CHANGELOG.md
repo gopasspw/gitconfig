@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Support for `hasconfig:remote.*.url` conditional includes. The condition is
+  evaluated against the remote URLs of all config scopes, matching git's
+  behavior.
 - `Config.Write()` to explicitly persist a single config scope to disk
 - `Config.NoWrites` to control write behavior per scope, e.g. to allow writes
   to the local config while `Configs.NoWrites` is set

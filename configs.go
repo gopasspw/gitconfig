@@ -150,9 +150,14 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 
 	debug.Log("Loading gitconfigs for %s", cs.Name)
 
+	// Collect the remote URLs of all scopes first. Git evaluates
+	// hasconfig:remote.*.url conditions against the remote URLs of the whole
+	// configuration, not just the file that contains the condition.
+	remoteURLs := cs.collectRemoteURLs(workdir)
+
 	// load the system config, if any
 	if os.Getenv(cs.EnvPrefix+"_NOSYSTEM") == "" {
-		c, err := LoadConfig(cs.SystemConfig)
+		c, err := loadConfigsWithRemoteURLs(cs.SystemConfig, workdir, remoteURLs)
 		if err != nil {
 			debug.V(1).Log("[%s] failed to load system config: %s", cs.Name, err)
 		} else {
@@ -167,12 +172,12 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	}
 
 	// load the "global" (per user) config, if any
-	cs.loadGlobalConfigs()
+	cs.loadGlobalConfigsWithRemoteURLs(workdir, remoteURLs)
 
 	// load the local config, if any
 	if workdir != "" {
 		localConfigPath := filepath.Join(workdir, cs.LocalConfig)
-		c, err := LoadConfig(localConfigPath)
+		c, err := loadConfigsWithRemoteURLs(localConfigPath, workdir, remoteURLs)
 		if err != nil {
 			debug.V(1).Log("[%s] failed to load local config from %s: %s", cs.Name, localConfigPath, err)
 			// set the path just in case we want to modify / write to it later
@@ -186,7 +191,7 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	// load the worktree config, if any
 	if workdir != "" {
 		worktreeConfigPath := filepath.Join(workdir, cs.WorktreeConfig)
-		c, err := LoadConfig(worktreeConfigPath)
+		c, err := loadConfigsWithRemoteURLs(worktreeConfigPath, workdir, remoteURLs)
 		if err != nil {
 			debug.V(3).Log("[%s] failed to load worktree config from %s: %s", cs.Name, worktreeConfigPath, err)
 			// set the path just in case we want to modify / write to it later
@@ -203,6 +208,50 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	cs.applyNoWrites()
 
 	return cs
+}
+
+// collectRemoteURLs returns the remote URLs of all config scopes that are
+// about to be loaded. It is used to evaluate hasconfig:remote.*.url
+// conditional includes, which may reference a remote defined in a different
+// scope than the one containing the condition.
+//
+// It returns nil if none of the scopes contains an include directive, since
+// then no hasconfig condition can be present.
+func (cs *Configs) collectRemoteURLs(workdir string) []string {
+	paths := make([]string, 0, 6)
+	if os.Getenv(cs.EnvPrefix+"_NOSYSTEM") == "" {
+		paths = append(paths, cs.SystemConfig)
+	}
+	paths = append(paths, cs.globalConfigCandidates()...)
+	if workdir != "" {
+		paths = append(paths,
+			filepath.Join(workdir, cs.LocalConfig),
+			filepath.Join(workdir, cs.WorktreeConfig),
+		)
+	}
+
+	needed := false
+	for _, p := range paths {
+		c, err := loadConfig(p)
+		if err != nil {
+			continue
+		}
+		if configNeedsRemoteURLs(c) {
+			needed = true
+
+			break
+		}
+	}
+	if !needed {
+		return nil
+	}
+
+	urls := make([]string, 0, 4)
+	for _, p := range paths {
+		urls = append(urls, collectRemoteURLs(p)...)
+	}
+
+	return urls
 }
 
 // applyNoWrites propagates the Configs-level NoWrites flag to the writable
@@ -230,13 +279,26 @@ func globalConfigFile(name string) string {
 // Since we might need to try different locations but only want to use the first one
 // it's easier to handle this in its own method.
 func (cs *Configs) loadGlobalConfigs() string {
+	return cs.loadGlobalConfigsWithRemoteURLs(cs.workdir, nil)
+}
+
+// loadGlobalConfigsWithRemoteURLs is like loadGlobalConfigs but evaluates
+// hasconfig:remote.*.url conditional includes against the given remote URLs.
+// If remoteURLs is nil they are collected from the global config candidates.
+func (cs *Configs) loadGlobalConfigsWithRemoteURLs(workdir string, remoteURLs []string) string {
 	locs := cs.globalConfigCandidates()
+
+	if remoteURLs == nil {
+		for _, p := range locs {
+			remoteURLs = append(remoteURLs, collectRemoteURLsIfNeeded(p)...)
+		}
+	}
 
 	// if we already have a global config we can just reload it instead of trying all locations
 	if !cs.global.IsEmpty() {
 		if p := cs.global.path; p != "" {
 			debug.V(1).Log("[%s] reloading existing global config from %s", cs.Name, p)
-			cfg, err := LoadConfig(p)
+			cfg, err := loadConfigsWithRemoteURLs(p, workdir, remoteURLs)
 			if err != nil {
 				debug.V(1).Log("[%s] failed to reload global config from %s", cs.Name, p)
 			} else {
@@ -249,7 +311,7 @@ func (cs *Configs) loadGlobalConfigs() string {
 
 	debug.V(1).Log("[%s] trying to find global configs in %v", cs.Name, locs)
 	for _, p := range locs {
-		cfg, err := LoadConfig(p)
+		cfg, err := loadConfigsWithRemoteURLs(p, workdir, remoteURLs)
 		if err != nil {
 			debug.V(1).Log("[%s] failed to load global config from %s: %s", cs.Name, p, err)
 

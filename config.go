@@ -849,11 +849,12 @@ func readGitBranch(workdir string) string {
 
 // getEffectiveIncludes returns all include paths from the config, combining
 // basic [include] directives with conditional [includeIf] directives.
-// The workdir parameter is used to evaluate conditional includes.
-func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
+// The workdir parameter is used to evaluate conditional includes and
+// remoteURLs holds the remote URLs used for hasconfig conditions.
+func getEffectiveIncludes(c *Config, workdir string, remoteURLs []string) ([]string, bool) {
 	includePaths, includeExists := c.GetAll("include.path")
 
-	if cIncludes := getConditionalIncludes(c, workdir); len(cIncludes) > 0 {
+	if cIncludes := getConditionalIncludes(c, workdir, remoteURLs); len(cIncludes) > 0 {
 		includePaths = append(includePaths, cIncludes...)
 		includeExists = true
 	}
@@ -866,7 +867,9 @@ func getEffectiveIncludes(c *Config, workdir string) ([]string, bool) {
 // Supported conditions:
 //   - gitdir:<pattern> - Include if git directory matches pattern (case-sensitive)
 //   - gitdir/i:<pattern> - Include if git directory matches pattern (case-insensitive)
-func getConditionalIncludes(c *Config, workdir string) []string {
+//   - onbranch:<pattern> - Include if the current branch matches pattern
+//   - hasconfig:remote.*.url:<pattern> - Include if any remote URL matches pattern
+func getConditionalIncludes(c *Config, workdir string, remoteURLs []string) []string {
 	candidates := []string{}
 	for k := range c.vars {
 		debug.V(3).Log("found config key: %q", k)
@@ -880,7 +883,7 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 	}
 
 	out := make([]string, 0, len(candidates))
-	for _, k := range filterCandidates(candidates, workdir, c) {
+	for _, k := range filterCandidates(candidates, workdir, c, remoteURLs) {
 		path, found := c.GetAll(k)
 		if !found {
 			debug.V(3).Log("skipping include candidate %q, no path found", k)
@@ -894,9 +897,8 @@ func getConditionalIncludes(c *Config, workdir string) []string {
 }
 
 // filterCandidates filters the candidates for include paths.
-// Currently only the gitdir condition is supported.
-// Others might be added in the future.
-func filterCandidates(candidates []string, workdir string, c *Config) []string {
+// See matchSubSection for the supported conditions.
+func filterCandidates(candidates []string, workdir string, c *Config, remoteURLs []string) []string {
 	out := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		sec, subsec, key := splitKey(candidate)
@@ -906,7 +908,7 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 			continue
 		}
 
-		if matchSubSection(subsec, workdir, c) {
+		if matchSubSection(subsec, workdir, c, remoteURLs) {
 			out = append(out, candidate)
 		}
 	}
@@ -915,9 +917,9 @@ func filterCandidates(candidates []string, workdir string, c *Config) []string {
 }
 
 // matchSubSection determines if a subsection condition matches the current environment.
-// Handles gitdir, gitdir/i, onbranch, and other condition types.
+// Handles gitdir, gitdir/i, onbranch, hasconfig:remote.*.url and other condition types.
 // Returns true if the condition matches and the config should be included.
-func matchSubSection(subsec, workdir string, c *Config) bool {
+func matchSubSection(subsec, workdir string, c *Config, remoteURLs []string) bool {
 	if strings.HasPrefix(subsec, "gitdir") {
 		caseInsensitive := strings.Contains(subsec, "/i:")
 		p := strings.SplitN(subsec, ":", 2)
@@ -958,9 +960,123 @@ func matchSubSection(subsec, workdir string, c *Config) bool {
 		return false
 	}
 
+	if strings.HasPrefix(subsec, hasConfigRemoteURLPrefix) {
+		pattern := strings.TrimPrefix(subsec, hasConfigRemoteURLPrefix)
+		for _, u := range remoteURLs {
+			match, err := globMatch(pattern, u)
+			if err != nil {
+				debug.V(1).Log("invalid glob pattern in hasconfig:remote.*.url: %s", err)
+
+				return false
+			}
+			if match {
+				return true
+			}
+		}
+
+		debug.V(3).Log("skipping include candidate, no remote URL matches %q", pattern)
+
+		return false
+	}
+
 	debug.V(3).Log("skipping unsupported include candidate %q", subsec)
 
 	return false
+}
+
+// hasConfigRemoteURLPrefix is the prefix of the hasconfig:remote.*.url
+// conditional include. See
+// https://git-scm.com/docs/git-config#_conditional_includes.
+const hasConfigRemoteURLPrefix = "hasconfig:remote.*.url:"
+
+// remoteURLsFromConfig returns all remote.<name>.url values of the given config.
+func remoteURLsFromConfig(c *Config) []string {
+	if c == nil {
+		return nil
+	}
+
+	urls := make([]string, 0, 4)
+	for k, vs := range c.vars {
+		sec, sub, key := splitKey(k)
+		if sec == "remote" && sub != "" && key == "url" {
+			urls = append(urls, vs...)
+		}
+	}
+
+	return urls
+}
+
+// configNeedsRemoteURLs reports whether the config may contain
+// hasconfig:remote.*.url conditions, either directly or through includes.
+func configNeedsRemoteURLs(c *Config) bool {
+	if c == nil {
+		return false
+	}
+
+	for k := range c.vars {
+		if strings.HasPrefix(k, "includeif.") || k == "include.path" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// collectRemoteURLsIfNeeded is like collectRemoteURLs but skips configs that
+// cannot contain hasconfig:remote.*.url conditions, i.e. configs without any
+// include directives.
+func collectRemoteURLsIfNeeded(fn string) []string {
+	c, err := loadConfig(fn)
+	if err != nil || !configNeedsRemoteURLs(c) {
+		return nil
+	}
+
+	return collectRemoteURLs(fn)
+}
+
+// collectRemoteURLs returns all remote.<name>.url values found in the given
+// config file and all files it includes, regardless of any includeIf
+// conditions. This mirrors git, which collects all remote URLs before it
+// evaluates hasconfig:remote.*.url conditions.
+func collectRemoteURLs(fn string) []string {
+	urls := []string{}
+	seen := map[string]struct{}{}
+	queue := []string{fn}
+
+	for len(queue) > 0 {
+		head := queue[0]
+		queue = queue[1:]
+
+		if _, ok := seen[head]; ok {
+			continue
+		}
+		seen[head] = struct{}{}
+
+		c, err := loadConfig(head)
+		if err != nil {
+			debug.V(3).Log("failed to load config %q while collecting remote URLs: %s", head, err)
+
+			continue
+		}
+
+		urls = append(urls, remoteURLsFromConfig(c)...)
+
+		// Collect the paths of all includes, conditional or not. Git also
+		// reads all conditionally included files when collecting remote URLs.
+		includes, _ := c.GetAll("include.path")
+		for k := range c.vars {
+			if !strings.HasPrefix(k, "includeif.") || !strings.HasSuffix(k, ".path") {
+				continue
+			}
+			if vs, ok := c.GetAll(k); ok {
+				includes = append(includes, vs...)
+			}
+		}
+
+		queue = append(queue, getPathsForNestedConfig(includes, head)...)
+	}
+
+	return urls
 }
 
 // prefixMatch checks if a path matches a prefix pattern, with optional case-folding.
@@ -981,6 +1097,14 @@ func prefixMatch(path, prefix string, fold bool) bool {
 // This is the main entry point for loading configs with include support.
 // Returns the merged configuration from all included files.
 func loadConfigs(fn, workdir string) (*Config, error) {
+	return loadConfigsWithRemoteURLs(fn, workdir, collectRemoteURLsIfNeeded(fn))
+}
+
+// loadConfigsWithRemoteURLs is like loadConfigs but uses the given remote URLs
+// to evaluate hasconfig:remote.*.url conditional includes. Callers that load
+// multiple config scopes can collect the remote URLs of all scopes first, so
+// that a condition in one scope can match a remote defined in another one.
+func loadConfigsWithRemoteURLs(fn, workdir string, remoteURLs []string) (*Config, error) {
 	c, err := loadConfig(fn)
 	if err != nil {
 		return nil, err
@@ -993,7 +1117,7 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 	}
 	configsToLoad := []string{}
 
-	includePaths, includeExists := getEffectiveIncludes(c, workdir)
+	includePaths, includeExists := getEffectiveIncludes(c, workdir, remoteURLs)
 	if includeExists {
 		configsToLoad = append(configsToLoad, getPathsForNestedConfig(includePaths, c.path)...)
 	}
@@ -1024,7 +1148,7 @@ func loadConfigs(fn, workdir string) (*Config, error) {
 		c = mergeConfigs(c, nc)
 		loadedConfigs[head] = struct{}{}
 
-		includePaths, includeExists := getEffectiveIncludes(nc, workdir)
+		includePaths, includeExists := getEffectiveIncludes(nc, workdir, remoteURLs)
 		if includeExists {
 			configsToLoad = append(configsToLoad, getPathsForNestedConfig(includePaths, nc.path)...)
 		}

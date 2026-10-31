@@ -293,10 +293,11 @@ The library supports Git's `[include]` and `[includeIf]` directives:
 
 - `gitdir:` - Include if git directory matches pattern
 - `gitdir/i:` - Case-insensitive gitdir match
+- `onbranch:` - Include if the current branch matches pattern
+- `hasconfig:remote.*.url:` - Include if any configured remote URL matches pattern
 
 **Current limitations:**
 
-- Other conditional types (onbranch, hasconfig) are not yet supported
 - Relative paths in includes are resolved from the config file's directory
 
 ### Subsections
@@ -365,7 +366,8 @@ Current implementation has the following known limitations:
 
 - **Bare boolean values** - Keys without values (bare booleans) are not supported
 - **Worktree support** - Only partial worktree config support
-- **includeIf conditions** - Only `gitdir` and `gitdir/i` are supported
+- **includeIf conditions** - `gitdir`, `gitdir/i`, `onbranch` and
+  `hasconfig:remote.*.url` are supported
 - **URL matching** - `url.<base>.insteadOf` patterns are not yet implemented
 - **Multivar operations** - No special handling for replacing specific multivar instances
 - **Whitespace preservation** - Insignificant whitespace is not always perfectly preserved

@@ -201,5 +201,6 @@
 //
 // * Worktree support is only partial
 // * Bare boolean values are not supported (e.g. a setting were only the key is present)
-// * includeIf suppport is only partial, i.e. we only support the gitdir option
+// * includeIf support is only partial, i.e. we support the gitdir, gitdir/i,
+// onbranch and hasconfig:remote.*.url conditions
 package gitconfig
