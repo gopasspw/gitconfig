@@ -180,10 +180,9 @@ Include files based on conditions:
 - `gitdir:<pattern>` - Include if git directory matches pattern (case-sensitive)
 - `gitdir/i:<pattern>` - Include if git directory matches pattern (case-insensitive)
 - `onbranch:<pattern>` - Include if operating on a specific branch
-
-**Current limitations:**
-
-- `hasconfig:remote.*.url:<pattern>` - Not supported
+- `hasconfig:remote.*.url:<pattern>` - Include if any configured remote URL
+  matches pattern. The remote URLs of all scopes are considered, so a
+  condition may match a remote defined in another config file.
 
 ### Include Precedence
 
@@ -349,7 +348,6 @@ This library attempts to preserve the original file structure when writing:
 **Not Supported:**
 
 - Bare boolean values (keys without `=` sign)
-- Some advanced include conditions (onbranch, hasconfig)
 - URL rewrite patterns
 - Replacing specific instances of multivars
 
