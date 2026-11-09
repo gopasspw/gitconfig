@@ -247,10 +247,10 @@ func TestSetGetErrors(t *testing.T) {
 		cfg, err := LoadConfig(configPath)
 		require.NoError(t, err)
 
-		// Get single value (should return first)
+		// Get single value (should return last per git-config)
 		value, ok := cfg.Get("user.multivalue")
 		assert.True(t, ok)
-		assert.Equal(t, "first", value)
+		assert.Equal(t, "second", value)
 
 		// GetAll should return both
 		values, ok := cfg.GetAll("user.multivalue")

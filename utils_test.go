@@ -291,8 +291,20 @@ func TestParseLineForComment(t *testing.T) {
 		{
 			name:        "Mismatched surrounding quotes 2",
 			input:       ` 'mismatched quote"`,
-			wantContent: `'mismatched quote"`,
+			wantContent: `'mismatched quote`,
 			wantComment: ``,
+		},
+		{
+			name:        "Mid-value double quotes with hash inside and comment outside",
+			input:       `prefix "mid # quoted" suffix # trailing`,
+			wantContent: `prefix mid # quoted suffix`,
+			wantComment: `trailing`,
+		},
+		{
+			name:        "Escaped double quotes inside quoted value with comment",
+			input:       `"escaped \" quote # not comment" ; real comment`,
+			wantContent: `escaped \" quote # not comment`,
+			wantComment: `real comment`,
 		},
 		{
 			name:        "Single quote only content",
