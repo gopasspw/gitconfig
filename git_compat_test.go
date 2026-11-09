@@ -236,7 +236,7 @@ func TestGitCompatBareBooleans(t *testing.T) {
 
 	v, ok = c.Get("http.emptyVal")
 	assert.True(t, ok)
-	assert.Equal(t, "", v)
+	assert.Empty(t, v)
 
 	// GetBool distinguishes bare keys (true) from empty `key =` values (false)
 	b, ok := c.GetBool("http.sslVerify")
@@ -437,12 +437,18 @@ func TestGitCompatWorkdirAndGitFileDiscovery(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(wtGitDir, "HEAD"), []byte("ref: refs/heads/feat/worktree\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(wtGitDir, "config.worktree"), []byte("[worktree]\n\tspecific = yes\n"), 0o600))
 
+	// Without extensions.worktreeConfig = true, config.worktree is ignored per git rules
 	csWt := New()
 	csWt.EnvPrefix = "GPTEST_WD"
 	csWt.LoadAll(wtRoot)
 
 	assert.Equal(t, "false", csWt.GetLocal("core.bare"))
 	assert.Equal(t, "true", csWt.GetLocal("branchcfg.active"))
+	assert.Empty(t, csWt.Get("worktree.specific"))
+
+	// Enabling extensions.worktreeConfig causes config.worktree to be loaded
+	require.NoError(t, csWt.SetLocal("extensions.worktreeConfig", "true"))
+	csWt.Reload()
 	assert.Equal(t, "yes", csWt.Get("worktree.specific"))
 }
 

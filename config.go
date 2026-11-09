@@ -17,9 +17,8 @@ import (
 )
 
 var (
-	keyValueTpl     = "\t%s = %s%s"
-	keyTpl          = "\t%s%s"
-	reQuotedComment = regexp.MustCompile(`"[^"]*[#;][^"]*"`)
+	keyValueTpl = "\t%s = %s%s"
+	keyTpl      = "\t%s%s"
 	// "The variable names are case-insensitive, allow only alphanumeric characters and -, and must start with an alphabetic character."".
 	reValidKey = regexp.MustCompile(`^[a-z]+[a-z0-9-]*$`)
 
@@ -317,9 +316,9 @@ func parseBoolValue(v string) (bool, bool) {
 // GetInt returns the integer interpretation of the key's value per git-config rules.
 //
 // Supports optional case-insensitive unit suffixes:
-// - k: multiplies by 1024
-// - m: multiplies by 1048576 (1024^2)
-// - g: multiplies by 1073741824 (1024^3)
+// - k: multiplies by 1024.
+// - m: multiplies by 1048576 (1024^2).
+// - g: multiplies by 1073741824 (1024^3).
 func (c *Config) GetInt(key string) (int64, bool) {
 	if c == nil {
 		return 0, false
@@ -938,30 +937,21 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	var section string
 	var subsection string
 	for s.Scan() {
-		fullLine := s.Text()
-		for hasLineContinuation(fullLine) && s.Scan() {
-			fullLine = strings.TrimSuffix(fullLine, `\`) + s.Text()
-		}
-
+		fullLine := readLogicalLine(s)
 		lines = append(lines, fullLine)
 
 		line := strings.TrimSpace(fullLine)
 		// Handle full-line comments
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.HasPrefix(line, ";") {
+		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
 			continue
 		}
 
 		// Handle section headers
 		if strings.HasPrefix(line, "[") {
-			s, subs, skip := parseSectionHeader(line)
-			if skip {
-				continue
+			if s, subs, skip := parseSectionHeader(line); !skip {
+				section = s
+				subsection = subs
 			}
-			section = s
-			subsection = subs
 
 			continue
 		}
@@ -970,66 +960,18 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 			continue
 		}
 
-		// Reference: https://git-scm.com/docs/git-config#_syntax.
-		k, v, found := strings.Cut(line, "=")
-		var bareComment string
-		var isBare bool
-		// This is a special case for bare booleans ("name" without "=", short-hand for boolean "true").
-		if !found && !strings.HasPrefix(line, "[") && strings.TrimSpace(line) != "" {
-			if idx := strings.IndexAny(k, "#;"); idx >= 0 {
-				bareComment = " " + k[idx:]
-				k = k[:idx]
-			}
-			v = "true"
-			found = true
-			isBare = true
-		}
-		if !found {
-			debug.V(3).Log("no valid KV-pair on line: %q", line)
-
-			continue
-		}
-		// Remove whitespace from key and value that might be around the '='
-		// "Whitespace characters surrounding name, = and value are discarded."
-		// https://git-scm.com/docs/git-config#_syntax
-		k = strings.TrimSpace(k)
-		v = strings.TrimSpace(v)
-
-		// keep a copy of the original key for serialization.
-		ok := k
-		// "The variable names are case-insensitive"
-		k = strings.ToLower(k)
-
-		if !reValidKey.MatchString(k) {
-			debug.V(3).Log("invalid key %q in line: %q", k, line)
-
+		ok, k, oValue, comment, valid := parseKeyValueLine(line)
+		if !valid {
 			continue
 		}
 
-		fKey := section + "."
-		if subsection != "" {
-			fKey += subsection + "."
-		}
-		fKey += k
+		fKey := joinKey(section, subsection, k)
 		if key == "" {
 			wKey = ok
-		}
-
-		// extract possible comment from the value
-		oValue, comment := splitValueComment(v)
-		if isBare && comment == "" {
-			comment = bareComment
-		}
-
-		// unescape value
-		if !CompatMode {
-			oValue = unescapeValue(oValue)
-		}
-
-		if key != "" && canonicalizeKey(key) != canonicalizeKey(fKey) {
-			continue
-		}
-		if key != "" {
+		} else {
+			if canonicalizeKey(key) != canonicalizeKey(fKey) {
+				continue
+			}
 			oValue = value
 		}
 
@@ -1045,6 +987,69 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	}
 
 	return lines
+}
+
+func readLogicalLine(s *bufio.Scanner) string {
+	fullLine := s.Text()
+	for hasLineContinuation(fullLine) && s.Scan() {
+		fullLine = strings.TrimSuffix(fullLine, `\`) + s.Text()
+	}
+
+	return fullLine
+}
+
+func joinKey(section, subsection, key string) string {
+	if subsection != "" {
+		return section + "." + subsection + "." + key
+	}
+
+	return section + "." + key
+}
+
+func parseKeyValueLine(line string) (origKey, normKey, val, comment string, ok bool) { //nolint:nonamedreturns
+	// Reference: https://git-scm.com/docs/git-config#_syntax.
+	k, v, found := strings.Cut(line, "=")
+	var bareComment string
+	var isBare bool
+	// This is a special case for bare booleans ("name" without "=", short-hand for boolean "true").
+	if !found && !strings.HasPrefix(line, "[") && line != "" {
+		if idx := strings.IndexAny(k, "#;"); idx >= 0 {
+			bareComment = " " + k[idx:]
+			k = k[:idx]
+		}
+		v = "true"
+		found = true
+		isBare = true
+	}
+	if !found {
+		debug.V(3).Log("no valid KV-pair on line: %q", line)
+
+		return "", "", "", "", false
+	}
+	// Remove whitespace from key and value that might be around the '='
+	// "Whitespace characters surrounding name, = and value are discarded."
+	// https://git-scm.com/docs/git-config#_syntax
+	origKey = strings.TrimSpace(k)
+	v = strings.TrimSpace(v)
+
+	// "The variable names are case-insensitive"
+	normKey = strings.ToLower(origKey)
+	if !reValidKey.MatchString(normKey) {
+		debug.V(3).Log("invalid key %q in line: %q", normKey, line)
+
+		return "", "", "", "", false
+	}
+
+	val, comment = splitValueComment(v)
+	if isBare && comment == "" {
+		comment = bareComment
+	}
+
+	if !CompatMode {
+		val = unescapeValue(val)
+	}
+
+	return origKey, normKey, val, comment, true
 }
 
 func hasLineContinuation(line string) bool {
@@ -1387,37 +1392,7 @@ func filterCandidates(candidates []string, workdir string, c *Config, remoteURLs
 // Returns true if the condition matches and the config should be included.
 func matchSubSection(subsec, workdir string, c *Config, remoteURLs []string) bool {
 	if strings.HasPrefix(subsec, "gitdir:") || strings.HasPrefix(subsec, "gitdir/i:") {
-		if workdir == "" {
-			return false
-		}
-		caseInsensitive := strings.HasPrefix(subsec, "gitdir/i:")
-		_, dir, ok := strings.Cut(subsec, ":")
-		if !ok || dir == "" {
-			return false
-		}
-
-		var exactMatch bool
-		if caseInsensitive {
-			exactMatch = strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/"))
-		} else {
-			exactMatch = strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/")
-		}
-
-		if exactMatch || prefixMatch(workdir, dir, caseInsensitive) {
-			return true
-		}
-
-		var cfgPath string
-		if c != nil {
-			cfgPath = c.path
-		}
-		if matchGitDirPattern(dir, workdir, cfgPath, caseInsensitive) {
-			return true
-		}
-
-		debug.V(3).Log("skipping include candidate, no match for subsec %q and workdir %q", subsec, workdir)
-
-		return false
+		return matchGitDirSubSection(subsec, workdir, c)
 	}
 
 	if strings.HasPrefix(subsec, "onbranch:") {
@@ -1433,11 +1408,8 @@ func matchSubSection(subsec, workdir string, c *Config, remoteURLs []string) boo
 
 			return false
 		}
-		if match {
-			return true
-		}
 
-		return false
+		return match
 	}
 
 	if strings.HasPrefix(subsec, hasConfigRemoteURLPrefix) {
@@ -1460,6 +1432,38 @@ func matchSubSection(subsec, workdir string, c *Config, remoteURLs []string) boo
 	}
 
 	debug.V(3).Log("skipping unsupported include candidate %q", subsec)
+
+	return false
+}
+
+func matchGitDirSubSection(subsec, workdir string, c *Config) bool {
+	if workdir == "" {
+		return false
+	}
+	caseInsensitive := strings.HasPrefix(subsec, "gitdir/i:")
+	_, dir, ok := strings.Cut(subsec, ":")
+	if !ok || dir == "" {
+		return false
+	}
+
+	exactMatch := strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/")
+	if caseInsensitive {
+		exactMatch = strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/"))
+	}
+
+	if exactMatch || prefixMatch(workdir, dir, caseInsensitive) {
+		return true
+	}
+
+	var cfgPath string
+	if c != nil {
+		cfgPath = c.path
+	}
+	if matchGitDirPattern(dir, workdir, cfgPath, caseInsensitive) {
+		return true
+	}
+
+	debug.V(3).Log("skipping include candidate, no match for subsec %q and workdir %q", subsec, workdir)
 
 	return false
 }
@@ -1735,9 +1739,10 @@ func mergeConfigs(base *Config, extension *Config) *Config {
 
 // getPathsForNestedConfig tries to convert paths of nested configs ('/absolute', '~/from/home', 'relative/to/base') to absolute paths.
 func getPathsForNestedConfig(nestedConfigs []string, baseConfig string) []string {
+	baseDir := path.Dir(filepath.ToSlash(baseConfig))
 	absolutePaths := []string{}
 	for _, nc := range nestedConfigs {
-		if path.IsAbs(nc) {
+		if path.IsAbs(nc) || filepath.IsAbs(nc) {
 			absolutePaths = append(absolutePaths, nc)
 
 			continue
@@ -1750,11 +1755,11 @@ func getPathsForNestedConfig(nestedConfigs []string, baseConfig string) []string
 
 				continue
 			}
-			absolutePaths = append(absolutePaths, path.Join(home, strings.Replace(nc, "~/", "", 1)))
+			absolutePaths = append(absolutePaths, path.Join(filepath.ToSlash(home), strings.Replace(nc, "~/", "", 1)))
 
 			continue
 		}
-		absolutePaths = append(absolutePaths, path.Clean(path.Join(path.Dir(baseConfig), nc)))
+		absolutePaths = append(absolutePaths, path.Clean(path.Join(baseDir, filepath.ToSlash(nc))))
 	}
 
 	return absolutePaths

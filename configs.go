@@ -192,15 +192,7 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 
 	// load the worktree config, if any
 	if workdir != "" {
-		c, err := loadConfigsWithRemoteURLs(worktreeConfigPath, workdir, remoteURLs)
-		if err != nil {
-			debug.V(3).Log("[%s] failed to load worktree config from %s: %s", cs.Name, worktreeConfigPath, err)
-			// set the path just in case we want to modify / write to it later
-			cs.worktree.path = worktreeConfigPath
-		} else {
-			debug.V(1).Log("[%s] loaded worktree config from %s", cs.Name, worktreeConfigPath)
-			cs.worktree = c
-		}
+		cs.loadWorktreeConfigWithRemoteURLs(worktreeConfigPath, workdir, remoteURLs)
 	}
 
 	// load any env vars
@@ -209,6 +201,28 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	cs.applyNoWrites()
 
 	return cs
+}
+
+func (cs *Configs) loadWorktreeConfigWithRemoteURLs(worktreeConfigPath, workdir string, remoteURLs []string) {
+	if !cs.shouldLoadWorktree(workdir) {
+		cs.worktree = &Config{
+			path: worktreeConfigPath,
+		}
+
+		return
+	}
+
+	c, err := loadConfigsWithRemoteURLs(worktreeConfigPath, workdir, remoteURLs)
+	if err != nil {
+		debug.V(3).Log("[%s] failed to load worktree config from %s: %s", cs.Name, worktreeConfigPath, err)
+		// set the path just in case we want to modify / write to it later
+		cs.worktree.path = worktreeConfigPath
+
+		return
+	}
+
+	debug.V(1).Log("[%s] loaded worktree config from %s", cs.Name, worktreeConfigPath)
+	cs.worktree = c
 }
 
 func isEnvBoolTrue(val string) bool {
@@ -223,6 +237,21 @@ func (cs *Configs) systemConfigPath() string {
 	}
 
 	return cs.SystemConfig
+}
+
+// shouldLoadWorktree reports whether the worktree config file should be loaded.
+// For Git repositories using the default config.worktree file, Git only reads
+// config.worktree when extensions.worktreeConfig is enabled.
+func (cs *Configs) shouldLoadWorktree(workdir string) bool {
+	if cs.Name != name || cs.WorktreeConfig != worktreeConfig {
+		return true
+	}
+	if gitDir, _ := resolveGitDir(workdir); gitDir == "" {
+		return true
+	}
+	b, ok := cs.GetBool("extensions.worktreeConfig")
+
+	return ok && b
 }
 
 func (cs *Configs) resolveWorkdirConfigPaths(workdir string) (localPath, worktreePath string) { //nolint:nonamedreturns
