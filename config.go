@@ -17,9 +17,8 @@ import (
 )
 
 var (
-	keyValueTpl     = "\t%s = %s%s"
-	keyTpl          = "\t%s%s"
-	reQuotedComment = regexp.MustCompile(`"[^"]*[#;][^"]*"`)
+	keyValueTpl = "\t%s = %s%s"
+	keyTpl      = "\t%s%s"
 	// "The variable names are case-insensitive, allow only alphanumeric characters and -, and must start with an alphabetic character."".
 	reValidKey = regexp.MustCompile(`^[a-z]+[a-z0-9-]*$`)
 
@@ -257,9 +256,9 @@ func (c *Config) PruneEmptySections() error {
 	return c.flushRaw()
 }
 
-// Get returns the first value of the key.
+// Get returns the last value of the key in this config scope, matching
+// canonical `git config --get` (last-wins) semantics for multi-valued keys.
 //
-// For keys with multiple values, Get returns only the first one.
 // Use GetAll to retrieve all values for a key.
 //
 // The key is case-insensitive for sections and key names but case-sensitive
@@ -274,13 +273,133 @@ func (c *Config) PruneEmptySections() error {
 //	  fmt.Printf("Editor: %s\n", v)
 //	}
 func (c *Config) Get(key string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
 	key = canonicalizeKey(key)
 	vs, found := c.vars[key]
 	if !found || len(vs) < 1 {
 		return "", false
 	}
 
-	return vs[0], true
+	return vs[len(vs)-1], true
+}
+
+// GetBool returns the boolean interpretation of the key's value per git-config rules.
+//
+// Truthy values: "true", "yes", "on", "1", or a bare key without '='.
+// Falsy values: "false", "no", "off", "0", or an empty value after '='.
+// Returns (false, false) if the key is not set or cannot be parsed as a boolean.
+func (c *Config) GetBool(key string) (bool, bool) {
+	if c == nil {
+		return false, false
+	}
+	v, ok := c.Get(key)
+	if !ok {
+		return false, false
+	}
+
+	return parseBoolValue(v)
+}
+
+func parseBoolValue(v string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "yes", "on", "1":
+		return true, true
+	case "false", "no", "off", "0", "":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+// GetInt returns the integer interpretation of the key's value per git-config rules.
+//
+// Supports optional case-insensitive unit suffixes:
+// - k: multiplies by 1024.
+// - m: multiplies by 1048576 (1024^2).
+// - g: multiplies by 1073741824 (1024^3).
+func (c *Config) GetInt(key string) (int64, bool) {
+	if c == nil {
+		return 0, false
+	}
+	v, ok := c.Get(key)
+	if !ok {
+		return 0, false
+	}
+
+	return parseIntValue(v)
+}
+
+func parseIntValue(v string) (int64, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, false
+	}
+
+	multiplier := int64(1)
+	switch last := v[len(v)-1]; last {
+	case 'k', 'K':
+		multiplier = 1024
+		v = v[:len(v)-1]
+	case 'm', 'M':
+		multiplier = 1024 * 1024
+		v = v[:len(v)-1]
+	case 'g', 'G':
+		multiplier = 1024 * 1024 * 1024
+		v = v[:len(v)-1]
+	}
+
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+
+	return n * multiplier, true
+}
+
+// GetPath returns the path value of the key, expanding a leading "~/" to the
+// user's home directory per git-config path type rules.
+func (c *Config) GetPath(key string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	v, ok := c.Get(key)
+	if !ok {
+		return "", false
+	}
+
+	return expandPathValue(v), true
+}
+
+func expandPathValue(v string) string {
+	if v == "~" {
+		if home := userHomeDir(); home != "" {
+			return home
+		}
+	}
+	if strings.HasPrefix(v, "~/") || strings.HasPrefix(v, `~\`) {
+		if home := userHomeDir(); home != "" {
+			return filepath.Join(home, v[2:])
+		}
+	}
+
+	return v
+}
+
+func userHomeDir() string {
+	if hd := os.Getenv("GOPASS_HOMEDIR"); hd != "" {
+		return hd
+	}
+	if hd, exists := os.LookupEnv("HOME"); exists && hd != "" {
+		return hd
+	}
+	hd, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	return hd
 }
 
 // GetAll returns all values of the key.
@@ -422,6 +541,7 @@ func (c *Config) Set(key, value string) error {
 	if section == "" || subkey == "" {
 		return fmt.Errorf("%w: %s", ErrInvalidKey, key)
 	}
+	key = canonicalizeKey(key)
 
 	// can't set env vars
 	if c.readonly {
@@ -470,6 +590,85 @@ func (c *Config) Set(key, value string) error {
 		updated = true
 
 		return formatKeyValue(sKey, value, comment), false
+	})
+}
+
+// Add appends a new value for the key in the config (`git config --add`).
+// Unlike Set, which updates the first value if the key already exists,
+// Add always appends an additional entry for the key.
+func (c *Config) Add(key, value string) error {
+	section, _, subkey := splitKey(key)
+	if section == "" || subkey == "" {
+		return fmt.Errorf("%w: %s", ErrInvalidKey, key)
+	}
+	key = canonicalizeKey(key)
+
+	if c.readonly {
+		debug.Log("can not write to a readonly config")
+
+		return nil
+	}
+
+	if c.vars == nil {
+		c.vars = make(map[string][]string, 16)
+	}
+
+	vs, present := c.vars[key]
+	prevCount := len(vs)
+	c.vars[key] = append(vs, value)
+
+	if !present || prevCount == 0 {
+		return c.insertValue(key, value)
+	}
+
+	var seen int
+
+	return c.rewriteRaw(key, value, func(fKey, sKey, val, comment, line string) (string, bool) {
+		seen++
+		if seen == prevCount {
+			return line + "\n" + formatKeyValue(sKey, val, ""), false
+		}
+
+		return line, false
+	})
+}
+
+// SetAll replaces all values of a multi-valued key with a single new value
+// (`git config --replace-all`). If the key does not exist yet, it is inserted.
+func (c *Config) SetAll(key, value string) error {
+	section, _, subkey := splitKey(key)
+	if section == "" || subkey == "" {
+		return fmt.Errorf("%w: %s", ErrInvalidKey, key)
+	}
+	key = canonicalizeKey(key)
+
+	if c.readonly {
+		debug.Log("can not write to a readonly config")
+
+		return nil
+	}
+
+	if c.vars == nil {
+		c.vars = make(map[string][]string, 16)
+	}
+
+	_, present := c.vars[key]
+	c.vars[key] = []string{value}
+
+	if !present {
+		return c.insertValue(key, value)
+	}
+
+	var updated bool
+
+	return c.rewriteRaw(key, value, func(fKey, sKey, val, comment, line string) (string, bool) {
+		if !updated {
+			updated = true
+
+			return formatKeyValue(sKey, val, comment), false
+		}
+
+		return "", true
 	})
 }
 
@@ -538,14 +737,59 @@ func (c *Config) insertValue(key, value string) error {
 }
 
 // formatKeyValue formats a configuration key-value pair for writing to file.
-// If the value is empty or whitespace-only, only the key is written.
+// If the value is empty, only the key is written.
+// Values containing special characters or leading/trailing whitespace are
+// escaped and quoted so they round-trip cleanly when parsed back.
 // The comment parameter preserves any trailing comment from the original line.
 func formatKeyValue(key, value, comment string) string {
-	if strings.TrimSpace(value) == "" {
+	if value == "" {
 		return fmt.Sprintf(keyTpl, key, comment)
+	}
+	if !CompatMode {
+		value = escapeValueForWrite(value)
 	}
 
 	return fmt.Sprintf(keyValueTpl, key, value, comment)
+}
+
+func escapeValueForWrite(v string) string {
+	if v == "" {
+		return v
+	}
+
+	needsQuotes := strings.TrimSpace(v) != v || strings.ContainsAny(v, "#;\"")
+	hasEscapable := strings.ContainsAny(v, "\\\"\n\t\b")
+
+	if !needsQuotes && !hasEscapable {
+		return v
+	}
+
+	var b strings.Builder
+	b.Grow(len(v) + 4)
+	if needsQuotes {
+		b.WriteByte('"')
+	}
+	for i := range len(v) {
+		switch v[i] {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\b':
+			b.WriteString(`\b`)
+		default:
+			b.WriteByte(v[i])
+		}
+	}
+	if needsQuotes {
+		b.WriteByte('"')
+	}
+
+	return b.String()
 }
 
 // parseSectionHeader extracts the section and subsection from a config file section header line.
@@ -557,22 +801,56 @@ func formatKeyValue(key, value, comment string) string {
 //
 // The skip return value indicates whether this line should be ignored.
 func parseSectionHeader(line string) (section, subsection string, skip bool) { //nolint:nonamedreturns
-	line = strings.Trim(line, "[]")
+	line = stripHeaderComment(strings.TrimSpace(line))
+	if !strings.HasPrefix(line, "[") || !strings.HasSuffix(line, "]") {
+		line = strings.Trim(line, "[]")
+	} else {
+		line = line[1 : len(line)-1]
+	}
+	line = strings.TrimSpace(line)
 	if line == "" {
 		return "", "", true
 	}
-	wsp := strings.Index(line, " ")
+	wsp := strings.IndexAny(line, " \t")
 	if wsp < 0 {
-		return line, "", false
+		if sec, sub, ok := strings.Cut(line, "."); ok {
+			return strings.ToLower(sec), strings.ToLower(sub), false
+		}
+
+		return strings.ToLower(line), "", false
 	}
 
-	section = line[:wsp]
-	subsection = line[wsp+1:]
-	subsection = strings.ReplaceAll(subsection, "\\", "")
+	section = strings.ToLower(strings.TrimSpace(line[:wsp]))
+	subsection = strings.TrimSpace(line[wsp+1:])
 	subsection = strings.TrimPrefix(subsection, "\"")
 	subsection = strings.TrimSuffix(subsection, "\"")
+	subsection = unescapeSubsection(subsection)
 
 	return section, subsection, false
+}
+
+// unescapeSubsection unescapes a quoted subsection name according to git-config rules:
+// backslash followed by any character evaluates to that character (\\ -> \, \" -> ", \x -> x).
+func unescapeSubsection(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
+			b.WriteByte(s[i])
+
+			continue
+		}
+		if s[i] == '\\' {
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+
+	return b.String()
 }
 
 // rewriteRaw is used to rewrite the raw config copy. It is used for set and unset operations
@@ -659,83 +937,41 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	var section string
 	var subsection string
 	for s.Scan() {
-		fullLine := s.Text()
-
+		fullLine := readLogicalLine(s)
 		lines = append(lines, fullLine)
 
 		line := strings.TrimSpace(fullLine)
 		// Handle full-line comments
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.HasPrefix(line, ";") {
+		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
 			continue
 		}
 
 		// Handle section headers
 		if strings.HasPrefix(line, "[") {
-			s, subs, skip := parseSectionHeader(line)
-			if skip {
-				continue
+			if s, subs, skip := parseSectionHeader(line); !skip {
+				section = s
+				subsection = subs
 			}
-			section = s
-			subsection = subs
-		}
-
-		if key != "" && (section != wSection && subsection != wSubsection) {
-			continue
-		}
-
-		// Reference: https://git-scm.com/docs/git-config#_syntax.
-		k, v, found := strings.Cut(line, "=")
-		// This is a special case for bare booleans.
-		if !found && !strings.HasPrefix(line, "[") && strings.TrimSpace(line) != "" {
-			v = ""
-			found = true
-		}
-		if !found {
-			debug.V(3).Log("no valid KV-pair on line: %q", line)
-
-			continue
-		}
-		// Remove whitespace from key and value that might be around the '='
-		// "Whitespace characters surrounding name, = and value are discarded."
-		// https://git-scm.com/docs/git-config#_syntax
-		k = strings.TrimSpace(k)
-		v = strings.TrimSpace(v)
-
-		// keep a copy of the original key for serialization.
-		ok := k
-		// "The variable names are case-insensitive"
-		k = strings.ToLower(k)
-
-		if !reValidKey.MatchString(k) {
-			debug.V(3).Log("invalid key %q in line: %q", k, line)
 
 			continue
 		}
 
-		fKey := section + "."
-		if subsection != "" {
-			fKey += subsection + "."
+		if key != "" && (!strings.EqualFold(section, wSection) || subsection != wSubsection) {
+			continue
 		}
-		fKey += k
+
+		ok, k, oValue, comment, valid := parseKeyValueLine(line)
+		if !valid {
+			continue
+		}
+
+		fKey := joinKey(section, subsection, k)
 		if key == "" {
 			wKey = ok
-		}
-
-		// extract possilbe comment from the value
-		oValue, comment := splitValueComment(v)
-
-		// unescape value
-		if !CompatMode {
-			oValue = unescapeValue(oValue)
-		}
-
-		if key != "" && (key != fKey) {
-			continue
-		}
-		if key != "" {
+		} else {
+			if canonicalizeKey(key) != canonicalizeKey(fKey) {
+				continue
+			}
 			oValue = value
 		}
 
@@ -753,43 +989,225 @@ func parseConfig(in io.Reader, key, value string, cb parseFunc) []string {
 	return lines
 }
 
-// splitValueComment separates a config value from any trailing comment.
-// Handles three cases: no comment, unquoted value with comment, and quoted value with comment.
-// Returns the value (unquoted) and the comment portion (including # or ;).
-func splitValueComment(rValue string) (string, string) {
-	// Trivial case: no comment. Return early, do not alter anything.
-	if !strings.ContainsAny(rValue, "#;") {
-		// "If value needs to contain leading or trailing whitespace characters, it must be enclosed in double quotation marks (")."
-		rValue = strings.Trim(rValue, "\"")
-
-		return rValue, ""
+func readLogicalLine(s *bufio.Scanner) string {
+	fullLine := s.Text()
+	for hasLineContinuation(fullLine) && s.Scan() {
+		fullLine = strings.TrimSuffix(fullLine, `\`) + s.Text()
 	}
 
-	// Medium case: comment present, but not quoted.
-	if !reQuotedComment.MatchString(rValue) {
-		comment := " " + rValue[strings.IndexAny(rValue, "#;"):]
-		rValue = rValue[:strings.IndexAny(rValue, "#;")]
-		rValue = strings.TrimSpace(rValue)
-		rValue = strings.Trim(rValue, "\"")
-
-		return rValue, comment
-	}
-
-	// Hard case: comment present and quoted.
-	return parseLineForComment(rValue)
+	return fullLine
 }
 
-// unescapeValue processes escape sequences in configuration values.
-// Supports: \\, \", \n (newline), \t (tab), \b (backspace).
-// Other escape sequences (including octal) are not supported per Git config spec.
-func unescapeValue(value string) string {
-	value = strings.ReplaceAll(value, `\\`, `\`)
-	value = strings.ReplaceAll(value, `\"`, `"`)
-	value = strings.ReplaceAll(value, `\n`, "\n")
-	value = strings.ReplaceAll(value, `\t`, "\t")
-	value = strings.ReplaceAll(value, `\b`, "\b")
+func joinKey(section, subsection, key string) string {
+	if subsection != "" {
+		return section + "." + subsection + "." + key
+	}
 
-	return value
+	return section + "." + key
+}
+
+func parseKeyValueLine(line string) (origKey, normKey, val, comment string, ok bool) { //nolint:nonamedreturns
+	// Reference: https://git-scm.com/docs/git-config#_syntax.
+	k, v, found := strings.Cut(line, "=")
+	var bareComment string
+	var isBare bool
+	// This is a special case for bare booleans ("name" without "=", short-hand for boolean "true").
+	if !found && !strings.HasPrefix(line, "[") && line != "" {
+		if idx := strings.IndexAny(k, "#;"); idx >= 0 {
+			bareComment = " " + k[idx:]
+			k = k[:idx]
+		}
+		v = "true"
+		found = true
+		isBare = true
+	}
+	if !found {
+		debug.V(3).Log("no valid KV-pair on line: %q", line)
+
+		return "", "", "", "", false
+	}
+	// Remove whitespace from key and value that might be around the '='
+	// "Whitespace characters surrounding name, = and value are discarded."
+	// https://git-scm.com/docs/git-config#_syntax
+	origKey = strings.TrimSpace(k)
+	v = strings.TrimSpace(v)
+
+	// "The variable names are case-insensitive"
+	normKey = strings.ToLower(origKey)
+	if !reValidKey.MatchString(normKey) {
+		debug.V(3).Log("invalid key %q in line: %q", normKey, line)
+
+		return "", "", "", "", false
+	}
+
+	val, comment = splitValueComment(v)
+	if isBare && comment == "" {
+		comment = bareComment
+	}
+
+	if !CompatMode {
+		val = unescapeValue(val)
+	}
+
+	return origKey, normKey, val, comment, true
+}
+
+func hasLineContinuation(line string) bool {
+	if !strings.HasSuffix(line, `\`) {
+		return false
+	}
+	var inQuotes bool
+	var escaped bool
+	for i := range len(line) {
+		ch := line[i]
+		if escaped {
+			escaped = false
+
+			continue
+		}
+		if ch == '\\' {
+			if i == len(line)-1 {
+				return true
+			}
+			escaped = true
+
+			continue
+		}
+		if ch == '"' {
+			inQuotes = !inQuotes
+
+			continue
+		}
+		if !inQuotes && (ch == '#' || ch == ';') {
+			return false
+		}
+	}
+
+	return false
+}
+
+func hasEqualsBeforeComment(line string) bool {
+	for i := range len(line) {
+		switch line[i] {
+		case '=':
+			return true
+		case '#', ';':
+			return false
+		}
+	}
+
+	return false
+}
+
+// splitValueComment separates a config value from any trailing comment.
+// Handles unquoted values, partially or fully double-quoted values, escapes,
+// and trailing # or ; comments.
+// Returns the value (with surrounding/mid-value quotes stripped, preserving
+// escape sequences for unescapeValue) and the comment portion (including # or ;).
+func splitValueComment(rValue string) (string, string) {
+	if rValue == "" {
+		return "", ""
+	}
+
+	var val strings.Builder
+	var pendingSpace strings.Builder
+	var inQuotes bool
+	var seenContent bool
+
+	for i := 0; i < len(rValue); i++ {
+		ch := rValue[i]
+
+		if ch == '\\' {
+			if pendingSpace.Len() > 0 {
+				if seenContent {
+					val.WriteString(pendingSpace.String())
+				}
+				pendingSpace.Reset()
+			}
+			seenContent = true
+			val.WriteByte('\\')
+			if i+1 < len(rValue) {
+				i++
+				val.WriteByte(rValue[i])
+			}
+
+			continue
+		}
+
+		if ch == '"' {
+			if !inQuotes && pendingSpace.Len() > 0 {
+				if seenContent {
+					val.WriteString(pendingSpace.String())
+				}
+				pendingSpace.Reset()
+			}
+			inQuotes = !inQuotes
+			seenContent = true
+
+			continue
+		}
+
+		if !inQuotes {
+			if ch == '#' || ch == ';' {
+				return val.String(), " " + rValue[i:]
+			}
+			if ch == ' ' || ch == '\t' {
+				if seenContent {
+					pendingSpace.WriteByte(ch)
+				}
+
+				continue
+			}
+		}
+
+		if pendingSpace.Len() > 0 {
+			if seenContent {
+				val.WriteString(pendingSpace.String())
+			}
+			pendingSpace.Reset()
+		}
+		seenContent = true
+		val.WriteByte(ch)
+	}
+
+	return val.String(), ""
+}
+
+// unescapeValue processes escape sequences in configuration values in a single pass.
+// Supports: \\, \", \n (newline), \t (tab), \b (backspace).
+// Other escape sequences (including octal) are preserved unchanged.
+func unescapeValue(value string) string {
+	if !strings.Contains(value, `\`) {
+		return value
+	}
+
+	var b strings.Builder
+	b.Grow(len(value))
+	for i := 0; i < len(value); i++ {
+		if value[i] == '\\' && i+1 < len(value) {
+			i++
+			switch value[i] {
+			case '\\':
+				b.WriteByte('\\')
+			case '"':
+				b.WriteByte('"')
+			case 'n':
+				b.WriteByte('\n')
+			case 't':
+				b.WriteByte('\t')
+			case 'b':
+				b.WriteByte('\b')
+			default:
+				b.WriteByte('\\')
+				b.WriteByte(value[i])
+			}
+
+			continue
+		}
+		b.WriteByte(value[i])
+	}
+
+	return b.String()
 }
 
 // NewFromMap allows creating a new preset config from a map.
@@ -800,7 +1218,7 @@ func NewFromMap(data map[string]string) *Config {
 	}
 
 	for k, v := range data {
-		c.vars[k] = []string{v}
+		c.vars[canonicalizeKey(k)] = []string{v}
 	}
 
 	return c
@@ -822,14 +1240,67 @@ func LoadConfigWithWorkdir(fn, workdir string) (*Config, error) {
 	return c, nil
 }
 
-func readGitBranch(workdir string) string {
+// resolveGitDir resolves the per-worktree gitDir and shared commonDir for workdir.
+// It supports standard .git directories, bare/direct .git paths, and .git files
+// pointing to a worktree or submodule gitdir ("gitdir: <path>").
+func resolveGitDir(workdir string) (gitDir, commonDir string) { //nolint:nonamedreturns
 	if workdir == "" {
-		return ""
+		return "", ""
 	}
-	gitDir := filepath.Join(workdir, ".git")
-	// check if .git is a directory
-	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
-		// it might be a file with gitdir: path, not handled for now
+
+	dotGit := filepath.Join(workdir, ".git")
+	fi, err := os.Stat(dotGit)
+	if err != nil {
+		// Check if workdir itself is a git directory (contains HEAD or config)
+		if _, errHead := os.Stat(filepath.Join(workdir, "HEAD")); errHead == nil {
+			return workdir, resolveCommonDir(workdir)
+		}
+
+		return "", ""
+	}
+
+	if fi.IsDir() {
+		return dotGit, resolveCommonDir(dotGit)
+	}
+
+	// .git is a regular file: parse "gitdir: <path>"
+	content, err := os.ReadFile(dotGit)
+	if err != nil {
+		return "", ""
+	}
+	line := strings.TrimSpace(string(content))
+	target, ok := strings.CutPrefix(line, "gitdir:")
+	if !ok {
+		return "", ""
+	}
+	target = strings.TrimSpace(target)
+	if !filepath.IsAbs(target) {
+		target = filepath.Clean(filepath.Join(workdir, target))
+	}
+
+	return target, resolveCommonDir(target)
+}
+
+func resolveCommonDir(gitDir string) string {
+	commonDirFile := filepath.Join(gitDir, "commondir")
+	data, err := os.ReadFile(commonDirFile)
+	if err != nil {
+		return gitDir
+	}
+	rel := strings.TrimSpace(string(data))
+	if rel == "" {
+		return gitDir
+	}
+	if !filepath.IsAbs(rel) {
+		return filepath.Clean(filepath.Join(gitDir, rel))
+	}
+
+	return filepath.Clean(rel)
+}
+
+func readGitBranch(workdir string) string {
+	gitDir, _ := resolveGitDir(workdir)
+	if gitDir == "" {
 		return ""
 	}
 
@@ -920,24 +1391,8 @@ func filterCandidates(candidates []string, workdir string, c *Config, remoteURLs
 // Handles gitdir, gitdir/i, onbranch, hasconfig:remote.*.url and other condition types.
 // Returns true if the condition matches and the config should be included.
 func matchSubSection(subsec, workdir string, c *Config, remoteURLs []string) bool {
-	if strings.HasPrefix(subsec, "gitdir") {
-		caseInsensitive := strings.Contains(subsec, "/i:")
-		p := strings.SplitN(subsec, ":", 2)
-		dir := p[1]
-
-		var exactMatch bool
-		if caseInsensitive {
-			exactMatch = strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/"))
-		} else {
-			exactMatch = strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/")
-		}
-
-		if exactMatch || prefixMatch(dir, workdir, caseInsensitive) {
-			return true
-		}
-		debug.V(3).Log("skipping include candidate, no exact match for workdir: %q == dir: %q and no prefix match for dir: %q, workdir: %q", subsec, workdir, dir, dir, workdir)
-
-		return false
+	if strings.HasPrefix(subsec, "gitdir:") || strings.HasPrefix(subsec, "gitdir/i:") {
+		return matchGitDirSubSection(subsec, workdir, c)
 	}
 
 	if strings.HasPrefix(subsec, "onbranch:") {
@@ -953,11 +1408,8 @@ func matchSubSection(subsec, workdir string, c *Config, remoteURLs []string) boo
 
 			return false
 		}
-		if match {
-			return true
-		}
 
-		return false
+		return match
 	}
 
 	if strings.HasPrefix(subsec, hasConfigRemoteURLPrefix) {
@@ -980,6 +1432,92 @@ func matchSubSection(subsec, workdir string, c *Config, remoteURLs []string) boo
 	}
 
 	debug.V(3).Log("skipping unsupported include candidate %q", subsec)
+
+	return false
+}
+
+func matchGitDirSubSection(subsec, workdir string, c *Config) bool {
+	if workdir == "" {
+		return false
+	}
+	caseInsensitive := strings.HasPrefix(subsec, "gitdir/i:")
+	_, dir, ok := strings.Cut(subsec, ":")
+	if !ok || dir == "" {
+		return false
+	}
+
+	exactMatch := strings.TrimSuffix(workdir, "/") == strings.TrimSuffix(dir, "/")
+	if caseInsensitive {
+		exactMatch = strings.EqualFold(strings.TrimSuffix(workdir, "/"), strings.TrimSuffix(dir, "/"))
+	}
+
+	if exactMatch || prefixMatch(workdir, dir, caseInsensitive) {
+		return true
+	}
+
+	var cfgPath string
+	if c != nil {
+		cfgPath = c.path
+	}
+	if matchGitDirPattern(dir, workdir, cfgPath, caseInsensitive) {
+		return true
+	}
+
+	debug.V(3).Log("skipping include candidate, no match for subsec %q and workdir %q", subsec, workdir)
+
+	return false
+}
+
+func matchGitDirPattern(pattern, workdir, configPath string, caseInsensitive bool) bool {
+	pat := filepath.ToSlash(pattern)
+	trailingSlash := strings.HasSuffix(pat, "/")
+
+	switch {
+	case strings.HasPrefix(pat, "~/"):
+		home := userHomeDir()
+		if home == "" {
+			return false
+		}
+		pat = filepath.ToSlash(filepath.Join(home, pat[2:]))
+		if trailingSlash && !strings.HasSuffix(pat, "/") {
+			pat += "/"
+		}
+	case strings.HasPrefix(pat, "./"):
+		if configPath == "" {
+			return false
+		}
+		baseDir := filepath.Dir(configPath)
+		pat = filepath.ToSlash(filepath.Join(baseDir, pat[2:]))
+		if trailingSlash && !strings.HasSuffix(pat, "/") {
+			pat += "/"
+		}
+	case !strings.HasPrefix(pat, "/") && !strings.HasPrefix(pat, "**/") && filepath.VolumeName(pattern) == "":
+		pat = "**/" + pat
+	}
+
+	if strings.HasSuffix(pat, "/") {
+		pat += "**"
+	}
+
+	cleanWorkdir := filepath.ToSlash(filepath.Clean(workdir))
+	candidates := []string{cleanWorkdir}
+	if !strings.HasSuffix(cleanWorkdir, "/.git") {
+		candidates = append(candidates, cleanWorkdir+"/.git")
+	}
+
+	if caseInsensitive {
+		pat = strings.ToLower(pat)
+	}
+
+	for _, cand := range candidates {
+		target := cand
+		if caseInsensitive {
+			target = strings.ToLower(target)
+		}
+		if ok, err := globMatch(pat, target); err == nil && ok {
+			return true
+		}
+	}
 
 	return false
 }
@@ -1174,7 +1712,13 @@ func loadConfig(fn string) (*Config, error) {
 
 // mergeConfigs merge two configs, using first config as a base config extending it with vars, raw fields from the latter.
 func mergeConfigs(base *Config, extension *Config) *Config {
-	newConfig := Config{path: base.path, readonly: base.readonly, NoWrites: base.NoWrites, raw: strings.Builder{}, vars: map[string][]string{}}
+	newConfig := Config{
+		path:     base.path,
+		readonly: base.readonly,
+		NoWrites: base.NoWrites,
+		raw:      strings.Builder{},
+		vars:     map[string][]string{},
+	}
 	newConfig.raw.WriteString(base.raw.String())
 	// Note: We can not append the included config raw to the base config raw, because it will
 	// write the included config to the base config file when we write the base config.
@@ -1195,26 +1739,27 @@ func mergeConfigs(base *Config, extension *Config) *Config {
 
 // getPathsForNestedConfig tries to convert paths of nested configs ('/absolute', '~/from/home', 'relative/to/base') to absolute paths.
 func getPathsForNestedConfig(nestedConfigs []string, baseConfig string) []string {
+	baseDir := path.Dir(filepath.ToSlash(baseConfig))
 	absolutePaths := []string{}
 	for _, nc := range nestedConfigs {
-		if path.IsAbs(nc) {
+		if path.IsAbs(nc) || filepath.IsAbs(nc) {
 			absolutePaths = append(absolutePaths, nc)
 
 			continue
 		}
 		if strings.HasPrefix(nc, "~/") {
-			home, exists := os.LookupEnv("HOME")
-			if !exists {
+			home := userHomeDir()
+			if home == "" {
 				// cannot resolve home directory
 				debug.V(3).Log("cannot resolve home directory, skipping %q", nc)
 
 				continue
 			}
-			absolutePaths = append(absolutePaths, path.Join(home, strings.Replace(nc, "~/", "", 1)))
+			absolutePaths = append(absolutePaths, path.Join(filepath.ToSlash(home), strings.Replace(nc, "~/", "", 1)))
 
 			continue
 		}
-		absolutePaths = append(absolutePaths, path.Clean(path.Join(path.Dir(baseConfig), nc)))
+		absolutePaths = append(absolutePaths, path.Clean(path.Join(baseDir, filepath.ToSlash(nc))))
 	}
 
 	return absolutePaths
@@ -1227,9 +1772,12 @@ func ParseConfig(r io.Reader) *Config {
 		vars: make(map[string][]string, 42),
 	}
 
-	lines := parseConfig(r, "", "", func(fk, k, v, comment, _ string) (string, bool) {
+	lines := parseConfig(r, "", "", func(fk, k, v, comment, fullLine string) (string, bool) {
 		fk = canonicalizeKey(fk)
 		c.vars[fk] = append(c.vars[fk], v)
+		if !hasEqualsBeforeComment(fullLine) {
+			return formatKeyValue(k, "", comment), false
+		}
 
 		return formatKeyValue(k, v, comment), false
 	})
@@ -1243,38 +1791,97 @@ func ParseConfig(r io.Reader) *Config {
 }
 
 // LoadConfigFromEnv will try to parse an overlay config from the environment variables.
+// It supports both <envPrefix>_PARAMETERS (like GIT_CONFIG_PARAMETERS) and
+// <envPrefix>_COUNT / <envPrefix>_KEY_<i> / <envPrefix>_VALUE_<i>.
 // If no environment variables are set the resulting config will be valid but empty.
 // Either way it will not be writeable.
 func LoadConfigFromEnv(envPrefix string) *Config {
 	c := &Config{
 		NoWrites: true,
+		vars:     make(map[string][]string),
 	}
 
-	count, err := strconv.Atoi(os.Getenv(envPrefix + "_COUNT"))
-	if err != nil || count < 1 {
-		return &Config{
-			NoWrites: true,
-		}
+	if params := os.Getenv(envPrefix + "_PARAMETERS"); params != "" {
+		parseConfigParameters(params, c)
 	}
 
-	c.vars = make(map[string][]string, count)
-
-	for i := range count {
-		keyVar := fmt.Sprintf("%s%d", envPrefix+"_KEY_", i)
-		key := os.Getenv(keyVar)
-
-		valVar := fmt.Sprintf("%s%d", envPrefix+"_VALUE_", i)
-		value, found := os.LookupEnv(valVar)
-
-		if key == "" || !found {
+	if countStr, hasCount := os.LookupEnv(envPrefix + "_COUNT"); hasCount && countStr != "" {
+		count, err := strconv.Atoi(countStr)
+		if err != nil || count < 0 {
 			return &Config{
 				NoWrites: true,
 			}
 		}
 
-		c.vars[key] = append(c.vars[key], value)
-		debug.V(3).Log("added %s from env", key)
+		for i := range count {
+			keyVar := fmt.Sprintf("%s%d", envPrefix+"_KEY_", i)
+			key := os.Getenv(keyVar)
+
+			valVar := fmt.Sprintf("%s%d", envPrefix+"_VALUE_", i)
+			value, found := os.LookupEnv(valVar)
+
+			if key == "" || !found {
+				return &Config{
+					NoWrites: true,
+				}
+			}
+
+			ck := canonicalizeKey(key)
+			c.vars[ck] = append(c.vars[ck], value)
+			debug.V(3).Log("added %s from env", ck)
+		}
+	}
+
+	if len(c.vars) == 0 {
+		c.vars = nil
 	}
 
 	return c
+}
+
+// parseConfigParameters parses GIT_CONFIG_PARAMETERS-formatted strings.
+func parseConfigParameters(params string, c *Config) {
+	s := strings.TrimSpace(params)
+	for len(s) > 0 {
+		s = strings.TrimLeft(s, " \t")
+		if len(s) == 0 {
+			break
+		}
+
+		var token strings.Builder
+		for len(s) > 0 && s[0] != ' ' && s[0] != '\t' {
+			if s[0] == '\'' {
+				s = s[1:]
+				for len(s) > 0 && s[0] != '\'' {
+					token.WriteByte(s[0])
+					s = s[1:]
+				}
+				if len(s) > 0 && s[0] == '\'' {
+					s = s[1:]
+				}
+				if strings.HasPrefix(s, `\'`) {
+					token.WriteByte('\'')
+					s = s[2:]
+				}
+
+				continue
+			}
+			token.WriteByte(s[0])
+			s = s[1:]
+		}
+
+		item := token.String()
+		if item == "" {
+			continue
+		}
+		k, v, hasEq := strings.Cut(item, "=")
+		ck := canonicalizeKey(strings.TrimSpace(k))
+		if ck == "" {
+			continue
+		}
+		if !hasEq {
+			v = "true"
+		}
+		c.vars[ck] = append(c.vars[ck], v)
+	}
 }

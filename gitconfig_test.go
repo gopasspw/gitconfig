@@ -380,11 +380,11 @@ func TestParseSimple(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"core.filemode": "false",
-		"diff.external": "/usr/local/bin/diff-wrapper",
-		"diff.renames":  "true",
-		"core.gitproxy": "default-proxy",
-		// TODO(gitconfig): "http.sslVerify": "", // not supported, yet
+		"core.filemode":  "false",
+		"diff.external":  "/usr/local/bin/diff-wrapper",
+		"diff.renames":   "true",
+		"core.gitproxy":  "default-proxy",
+		"http.sslVerify": "true",
 		"http.https://weak.example.com.sslVerify":  "false",
 		"http.https://weak.example.com.cookieFile": "/tmp/cookie.txt",
 	}
@@ -517,31 +517,30 @@ func TestListSubsections(t *testing.T) {
 }
 
 func TestGitBinary(t *testing.T) {
-	t.Skip("not ready, yet") // TODO(gitconfig) make tests pass
-
 	cfgs := New()
 	cfgs.LoadAll(".")
 
-	cmd := exec.Command("git", "config", "--list")
+	cmd := exec.Command("git", "config", "--null", "--list")
 	buf, err := cmd.Output()
 	require.NoError(t, err)
-	lines := strings.Split(string(buf), "\n")
-	for _, line := range lines {
-		p := strings.SplitN(line, "=", 2)
+	entries := strings.Split(string(buf), "\x00")
+	for _, entry := range entries {
+		if entry == "" {
+			continue
+		}
+		p := strings.SplitN(entry, "\n", 2)
 		if len(p) < 2 {
 			continue
 		}
 		key := p[0]
 		want := p[1]
 
-		assert.Equal(t, want, cfgs.Get(key), key)
+		assert.Contains(t, cfgs.GetAll(key), want, key)
 	}
 }
 
 func TestGitCliList(t *testing.T) {
 	t.Parallel()
-
-	t.Skip("not ready, yet") // TODO(gitconfig) make tests pass
 
 	c := New()
 	c.NoWrites = true
@@ -570,12 +569,16 @@ func TestGitCliList(t *testing.T) {
 		return out
 	}(cliOut)
 
-	libOut := c.KVList("", "=")
-	// filter duplicates
+	libOut := strings.Split(strings.Join(c.KVList("", "="), "\n"), "\n")
+	sort.Strings(libOut)
+	// filter invalid lines and duplicates
 	libOut = func(s []string) []string {
 		prev := ""
 		out := make([]string, 0, len(s))
 		for _, l := range s {
+			if !strings.Contains(l, "=") {
+				continue
+			}
 			if l == prev {
 				continue
 			}
@@ -586,8 +589,7 @@ func TestGitCliList(t *testing.T) {
 		return out
 	}(libOut)
 
-	// TODO: Enable this asserting when we have burned down all diffs.
-	// assert.Equal(t, cliOut, libOut)
+	assert.Equal(t, cliOut, libOut)
 
 	diffs := 0
 	t.Logf("% 38s | % 38s | % 5s", "CLI", "LIB", "DIFF")

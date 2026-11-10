@@ -1,7 +1,6 @@
-// Package gitconfig implements a pure Go parser of Git SCM config files. The support
-// is currently not matching git exactly, e.g. includes, urlmatches and multivars are currently
-// not supported. And while we try to preserve the original file a much as possible
-// when writing we currently don't exactly retain (insignificant) whitespaces.
+// Package gitconfig implements a pure Go parser of Git SCM config files.
+// While we try to preserve the original file as much as possible when writing,
+// we currently don't retain insignificant whitespace in modified entries.
 //
 // The reference for this implementation is https://mirrors.edge.kernel.org/pub/software/scm/git/docs/git-config.html
 //
@@ -10,11 +9,11 @@
 // Use gitconfig.LoadAll with an optional workspace argument to process configuration
 // input from these locations in order (i.e. the later ones take precedence):
 //
-//   - `system` - /etc/gitconfig
-//   - `global` - `$XDG_CONFIG_HOME/git/config` or `~/.gitconfig`
-//   - `local` - `<workdir>/config`
-//   - `worktree` - `<workdir>/config.worktree`
-//   - `command` - GIT_CONFIG_{COUNT,KEY,VALUE} environment variables
+//   - `system` - /etc/gitconfig (or `$GIT_CONFIG_SYSTEM`)
+//   - `global` - `$GIT_CONFIG_GLOBAL`, `$XDG_CONFIG_HOME/git/config` or `~/.gitconfig`
+//   - `local` - `<workdir>/config` or `<workdir>/.git/config`
+//   - `worktree` - `<workdir>/config.worktree` or `<workdir>/.git/config.worktree`
+//   - `command` - `GIT_CONFIG_PARAMETERS` and `GIT_CONFIG_{COUNT,KEY,VALUE}` environment variables
 //
 // Note: We do not support parsing command line flags directly, but one
 // can use the SetEnv method to set flags from the command line in the config.
@@ -191,6 +190,18 @@
 //		}
 //	}
 //
+// ## Typed Getters and Multi-Valued Keys
+//
+// Typed accessors evaluate values according to canonical git-config rules:
+//
+//	enabled, ok := cfg.GetBool("http.sslVerify") // bare keys -> true, yes/on/1 -> true
+//	limit, ok := cfg.GetInt("pack.windowMemory") // supports k/m/g suffixes (1024-based)
+//	path, ok := cfg.GetPath("core.excludesFile") // expands leading ~/
+//
+// For multi-valued keys, Get returns the last value (matching `git config --get`).
+// Use Add (`git config --add`) to append a value to an existing key, or SetAll
+// (`git config --replace-all`) to replace all values.
+//
 // # Versioning and Compatibility
 //
 // We aim to support the latest stable release of Git only.
@@ -199,8 +210,5 @@
 //
 // # Known limitations
 //
-// * Worktree support is only partial
-// * Bare boolean values are not supported (e.g. a setting were only the key is present)
-// * includeIf support is only partial, i.e. we support the gitdir, gitdir/i,
-// onbranch and hasconfig:remote.*.url conditions
+// * `includeIf` supports the `gitdir:`, `gitdir/i:`, `onbranch:` and `hasconfig:remote.*.url:` conditions
 package gitconfig

@@ -201,8 +201,18 @@ func isKeyLine(line string) bool {
 // subsection are ignored.
 func stripHeaderComment(line string) string {
 	quoted := false
+	escaped := false
 	for i, r := range line {
+		if escaped {
+			escaped = false
+
+			continue
+		}
 		switch r {
+		case '\\':
+			if quoted {
+				escaped = true
+			}
 		case '"':
 			quoted = !quoted
 		case ']':

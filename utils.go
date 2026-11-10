@@ -161,64 +161,15 @@ func trim(s []string) {
 //	parseLineForComment(`plain-value`) returns ("plain-value", "")
 //	parseLineForComment(`"quoted value"`) returns ("quoted value", "")
 func parseLineForComment(line string) (string, string) {
-	line = strings.TrimSpace(line) // Trim whitespace from the line first
-	if !strings.HasPrefix(line, `"`) {
-		// no properly quoted value string, we shouldn't have ended up here.
-		if value, comment, found := strings.Cut(line, "#"); found {
-			return strings.TrimSpace(value), strings.TrimSpace(comment)
-		}
-		if value, comment, found := strings.Cut(line, ";"); found {
-			return strings.TrimSpace(value), strings.TrimSpace(comment)
-		}
-
-		// no comment found, return the line as is
-		return line, ""
+	val, rawComment := splitValueComment(strings.TrimSpace(line))
+	if rawComment == "" {
+		return val, ""
 	}
-	commentStartIndex := -1 // Initialize to -1, indicating comment not found yet
-	inQuotes := false
-	foundComment := false // Flag to signal when to break the loop
-
-	// Iterate through the string to find the first unquoted comment character
-	for i, r := range line {
-		switch r {
-		case '"':
-			inQuotes = !inQuotes
-		case '#', ';':
-			if !inQuotes {
-				commentStartIndex = i
-				foundComment = true
-			}
-		}
-		if foundComment {
-			break // Exit the for loop
-		}
+	// rawComment has the form " #<comment>" or " ;<comment>"
+	trimmed := strings.TrimSpace(rawComment)
+	if len(trimmed) > 0 && (trimmed[0] == '#' || trimmed[0] == ';') {
+		trimmed = strings.TrimSpace(trimmed[1:])
 	}
 
-	content := ""
-	comment := ""
-
-	// Determine initial content and comment parts based on index
-	var initialContent string
-	if commentStartIndex != -1 {
-		// Comment character was found
-		initialContent = line[:commentStartIndex]
-		// Extract comment text *after* the delimiter and trim whitespace
-		if commentStartIndex+1 <= len(line) { // Check index bounds
-			comment = strings.TrimSpace(line[commentStartIndex+1:])
-		} else {
-			comment = "" // Delimiter was the very last character
-		}
-	} else {
-		// No unquoted comment character found
-		initialContent = line
-		comment = ""
-	}
-
-	// Trim whitespace from the initial content part FIRST
-	trimmedContent := strings.TrimSpace(initialContent)
-	// Now, check for and remove surrounding quotes from the trimmed content
-	content = strings.Trim(trimmedContent, `"`)
-
-	// Return the processed content and the processed comment part
-	return content, comment
+	return val, trimmed
 }

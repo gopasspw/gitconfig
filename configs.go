@@ -156,12 +156,13 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	remoteURLs := cs.collectRemoteURLs(workdir)
 
 	// load the system config, if any
-	if os.Getenv(cs.EnvPrefix+"_NOSYSTEM") == "" {
-		c, err := loadConfigsWithRemoteURLs(cs.SystemConfig, workdir, remoteURLs)
+	if !isEnvBoolTrue(os.Getenv(cs.EnvPrefix + "_NOSYSTEM")) {
+		sysPath := cs.systemConfigPath()
+		c, err := loadConfigsWithRemoteURLs(sysPath, workdir, remoteURLs)
 		if err != nil {
 			debug.V(1).Log("[%s] failed to load system config: %s", cs.Name, err)
 		} else {
-			debug.V(1).Log("[%s] loaded system config from %s", cs.Name, cs.SystemConfig)
+			debug.V(1).Log("[%s] loaded system config from %s", cs.Name, sysPath)
 			cs.system = c
 			// the system config should generally not be written from gopass.
 			// in almost any scenario gopass shouldn't have write access
@@ -174,9 +175,10 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	// load the "global" (per user) config, if any
 	cs.loadGlobalConfigsWithRemoteURLs(workdir, remoteURLs)
 
+	localConfigPath, worktreeConfigPath := cs.resolveWorkdirConfigPaths(workdir)
+
 	// load the local config, if any
 	if workdir != "" {
-		localConfigPath := filepath.Join(workdir, cs.LocalConfig)
 		c, err := loadConfigsWithRemoteURLs(localConfigPath, workdir, remoteURLs)
 		if err != nil {
 			debug.V(1).Log("[%s] failed to load local config from %s: %s", cs.Name, localConfigPath, err)
@@ -190,16 +192,7 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 
 	// load the worktree config, if any
 	if workdir != "" {
-		worktreeConfigPath := filepath.Join(workdir, cs.WorktreeConfig)
-		c, err := loadConfigsWithRemoteURLs(worktreeConfigPath, workdir, remoteURLs)
-		if err != nil {
-			debug.V(3).Log("[%s] failed to load worktree config from %s: %s", cs.Name, worktreeConfigPath, err)
-			// set the path just in case we want to modify / write to it later
-			cs.worktree.path = worktreeConfigPath
-		} else {
-			debug.V(1).Log("[%s] loaded worktree config from %s", cs.Name, worktreeConfigPath)
-			cs.worktree = c
-		}
+		cs.loadWorktreeConfigWithRemoteURLs(worktreeConfigPath, workdir, remoteURLs)
 	}
 
 	// load any env vars
@@ -208,6 +201,81 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 	cs.applyNoWrites()
 
 	return cs
+}
+
+func (cs *Configs) loadWorktreeConfigWithRemoteURLs(worktreeConfigPath, workdir string, remoteURLs []string) {
+	if !cs.shouldLoadWorktree(workdir) {
+		cs.worktree = &Config{
+			path: worktreeConfigPath,
+		}
+
+		return
+	}
+
+	c, err := loadConfigsWithRemoteURLs(worktreeConfigPath, workdir, remoteURLs)
+	if err != nil {
+		debug.V(3).Log("[%s] failed to load worktree config from %s: %s", cs.Name, worktreeConfigPath, err)
+		// set the path just in case we want to modify / write to it later
+		cs.worktree.path = worktreeConfigPath
+
+		return
+	}
+
+	debug.V(1).Log("[%s] loaded worktree config from %s", cs.Name, worktreeConfigPath)
+	cs.worktree = c
+}
+
+func isEnvBoolTrue(val string) bool {
+	v, ok := parseBoolValue(val)
+
+	return ok && v
+}
+
+func (cs *Configs) systemConfigPath() string {
+	if p := os.Getenv(cs.EnvPrefix + "_SYSTEM"); p != "" {
+		return p
+	}
+
+	return cs.SystemConfig
+}
+
+// shouldLoadWorktree reports whether the worktree config file should be loaded.
+// For Git repositories using the default config.worktree file, Git only reads
+// config.worktree when extensions.worktreeConfig is enabled.
+func (cs *Configs) shouldLoadWorktree(workdir string) bool {
+	if cs.Name != name || cs.WorktreeConfig != worktreeConfig {
+		return true
+	}
+	if gitDir, _ := resolveGitDir(workdir); gitDir == "" {
+		return true
+	}
+	b, ok := cs.GetBool("extensions.worktreeConfig")
+
+	return ok && b
+}
+
+func (cs *Configs) resolveWorkdirConfigPaths(workdir string) (localPath, worktreePath string) { //nolint:nonamedreturns
+	if workdir == "" {
+		return "", ""
+	}
+	localPath = filepath.Join(workdir, cs.LocalConfig)
+	worktreePath = filepath.Join(workdir, cs.WorktreeConfig)
+
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath, worktreePath
+	}
+
+	gitDir, commonDir := resolveGitDir(workdir)
+	if gitDir != "" {
+		if commonDir != "" {
+			localPath = filepath.Join(commonDir, cs.LocalConfig)
+		} else {
+			localPath = filepath.Join(gitDir, cs.LocalConfig)
+		}
+		worktreePath = filepath.Join(gitDir, cs.WorktreeConfig)
+	}
+
+	return localPath, worktreePath
 }
 
 // collectRemoteURLs returns the remote URLs of all config scopes that are
@@ -219,15 +287,13 @@ func (cs *Configs) LoadAll(workdir string) *Configs {
 // then no hasconfig condition can be present.
 func (cs *Configs) collectRemoteURLs(workdir string) []string {
 	paths := make([]string, 0, 6)
-	if os.Getenv(cs.EnvPrefix+"_NOSYSTEM") == "" {
-		paths = append(paths, cs.SystemConfig)
+	if !isEnvBoolTrue(os.Getenv(cs.EnvPrefix + "_NOSYSTEM")) {
+		paths = append(paths, cs.systemConfigPath())
 	}
 	paths = append(paths, cs.globalConfigCandidates()...)
 	if workdir != "" {
-		paths = append(paths,
-			filepath.Join(workdir, cs.LocalConfig),
-			filepath.Join(workdir, cs.WorktreeConfig),
-		)
+		localPath, worktreePath := cs.resolveWorkdirConfigPaths(workdir)
+		paths = append(paths, localPath, worktreePath)
 	}
 
 	needed := false
@@ -343,6 +409,10 @@ func (cs *Configs) loadGlobalConfigsWithRemoteURLs(workdir string, remoteURLs []
 // ".gitconfig", is resolved below the user's home directory and only tried
 // after the XDG location.
 func (cs *Configs) globalConfigCandidates() []string {
+	if p := os.Getenv(cs.EnvPrefix + "_GLOBAL"); p != "" {
+		return []string{p}
+	}
+
 	xdgConfig := globalConfigFile(cs.Name)
 
 	if cs.GlobalConfig == "" {
@@ -360,6 +430,9 @@ func (cs *Configs) globalConfigCandidates() []string {
 // exists yet. An absolute GlobalConfig is the write target, so a default file
 // at the XDG location cannot shadow it on later runs.
 func (cs *Configs) globalConfigWritePath() string {
+	if p := os.Getenv(cs.EnvPrefix + "_GLOBAL"); p != "" {
+		return p
+	}
 	if filepath.IsAbs(cs.GlobalConfig) {
 		return cs.GlobalConfig
 	}
@@ -441,7 +514,8 @@ func (cs *Configs) Scope(name string) (*Config, bool) {
 //
 // The search stops at the first scope that has the key. Earlier scopes override later ones.
 //
-// Returns the value as a string. For keys with multiple values, returns the first one.
+// Returns the value as a string. For keys with multiple values, returns the last one
+// (matching canonical `git config --get` semantics).
 // Returns empty string if key not found in any scope.
 //
 // Example:
@@ -462,15 +536,70 @@ func (cs *Configs) Get(key string) string {
 	return ""
 }
 
-// GetAll returns all values for the given key from the first scope that contains it.
-//
-// Like Get but returns all values for keys that can have multiple entries.
-// See Get documentation for scope priority.
+// GetBool returns the boolean value for the given key from the highest-priority
+// scope that contains it, evaluated according to `git config --type=bool`.
+func (cs *Configs) GetBool(key string) (bool, bool) {
+	for _, cfg := range cs.scopesByPriority() {
+		if cfg.IsSet(key) {
+			return cfg.GetBool(key)
+		}
+	}
+
+	return false, false
+}
+
+// GetInt returns the integer value for the given key from the highest-priority
+// scope that contains it, evaluated according to `git config --type=int`.
+func (cs *Configs) GetInt(key string) (int64, bool) {
+	for _, cfg := range cs.scopesByPriority() {
+		if cfg.IsSet(key) {
+			return cfg.GetInt(key)
+		}
+	}
+
+	return 0, false
+}
+
+// GetPath returns the path value for the given key from the highest-priority
+// scope that contains it, expanding leading `~/` to the user's home directory
+// according to `git config --type=path`.
+func (cs *Configs) GetPath(key string) (string, bool) {
+	for _, cfg := range cs.scopesByPriority() {
+		if cfg.IsSet(key) {
+			return cfg.GetPath(key)
+		}
+	}
+
+	return "", false
+}
+
+// GetAll returns all values for the given key across all configuration scopes
+// in order of increasing priority (system, global, local, worktree, env),
+// matching `git config --get-all` semantics. If the key is not found in any of
+// those scopes, it falls back to Preset.
 //
 // Returns nil if key not found in any scope.
 func (cs *Configs) GetAll(key string) []string {
-	for _, cfg := range cs.scopesByPriority() {
+	var all []string
+	for _, cfg := range []*Config{
+		cs.system,
+		cs.global,
+		cs.local,
+		cs.worktree,
+		cs.env,
+	} {
+		if cfg == nil {
+			continue
+		}
 		if vs, found := cfg.GetAll(key); found {
+			all = append(all, vs...)
+		}
+	}
+	if len(all) > 0 {
+		return all
+	}
+	if cs.Preset != nil {
+		if vs, found := cs.Preset.GetAll(key); found {
 			return vs
 		}
 	}
@@ -557,27 +686,57 @@ func (cs *Configs) SetLocal(key, value string) error {
 	if cs.workdir == "" {
 		return ErrWorkdirNotSet
 	}
+	localPath, _ := cs.resolveWorkdirConfigPaths(cs.workdir)
 	if cs.local == nil {
 		cs.local = &Config{
-			path: filepath.Join(cs.workdir, cs.LocalConfig),
+			path: localPath,
 		}
 	}
 	if cs.local.path == "" {
-		cs.local.path = filepath.Join(cs.workdir, cs.LocalConfig)
+		cs.local.path = localPath
 	}
 
 	return cs.local.Set(key, value)
+}
+
+// AddLocal appends a new value for a key in the per-directory (local) config.
+func (cs *Configs) AddLocal(key, value string) error {
+	if cs.workdir == "" {
+		return ErrWorkdirNotSet
+	}
+	localPath, _ := cs.resolveWorkdirConfigPaths(cs.workdir)
+	if cs.local == nil {
+		cs.local = &Config{
+			path: localPath,
+		}
+	}
+	if cs.local.path == "" {
+		cs.local.path = localPath
+	}
+
+	return cs.local.Add(key, value)
 }
 
 // SetGlobal sets (or adds) a key only in the per-user (global) config.
 func (cs *Configs) SetGlobal(key, value string) error {
 	if cs.global == nil {
 		cs.global = &Config{
-			path: globalConfigFile(cs.Name),
+			path: cs.globalConfigWritePath(),
 		}
 	}
 
 	return cs.global.Set(key, value)
+}
+
+// AddGlobal appends a new value for a key in the per-user (global) config.
+func (cs *Configs) AddGlobal(key, value string) error {
+	if cs.global == nil {
+		cs.global = &Config{
+			path: cs.globalConfigWritePath(),
+		}
+	}
+
+	return cs.global.Add(key, value)
 }
 
 // SetEnv sets (or adds) a key in the per-process (env) config. Useful
